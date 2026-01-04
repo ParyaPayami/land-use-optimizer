@@ -1,0 +1,137 @@
+# Los Angeles Configuration
+# Data source: LA GeoHub (geohub.lacity.org) & LA County Open Data
+
+name: Los Angeles
+display_name: "Los Angeles, CA"
+state: CA
+country: USA
+
+geographic:
+  bounds: [-118.668176, 33.703652, -118.155289, 34.337306]
+  center: [-118.2437, 34.0522]
+  default_zoom: 11
+  crs: "EPSG:2229"  # CA State Plane Zone 5
+
+# Official City of Los Angeles GeoHub Sources
+data_sources:
+  # LA County Assessor Parcels
+  parcels:
+    name: "LA County Parcels"
+    url: "https://geohub.lacity.org/datasets/ladcp::parcels-deprecated.geojson"
+    format: geojson
+    description: "Los Angeles County parcels with assessor data"
+    update_frequency: "Annually"
+    
+    # Alternative: LA County direct
+    alt_url: "https://data.lacounty.gov/api/geospatial/parcels?method=export&format=GeoJSON"
+    
+  # LA City Zoning
+  zoning:
+    name: "Zoning"
+    url: "https://geohub.lacity.org/datasets/ladcp::zoning.geojson"
+    format: geojson
+    description: "LA City zoning districts"
+    
+  # LA Building Footprints
+  buildings:
+    name: "Building Footprints"
+    url: "https://geohub.lacity.org/datasets/lahub::building-footprints.geojson"
+    format: geojson
+    description: "LA building footprints with height data"
+    
+  # Street Network
+  streets:
+    name: "Street Centerlines"
+    url: "https://geohub.lacity.org/datasets/ladot::streets-centerlines.geojson"
+    format: geojson
+    description: "LA street network centerlines"
+    
+  # Community Plan Areas
+  community_plans:
+    name: "Community Plan Areas"
+    url: "https://geohub.lacity.org/datasets/ladcp::community-plan-area.geojson"
+    format: geojson
+    description: "35 Community Plan areas"
+
+# Column mapping from LA data to standard fields
+column_mapping:
+  parcel_id: "APN"
+  lot_area_sqft: "SHAPE_AREA"
+  zone_district: "ZONE_CLASS"
+  land_use: "GENERALPLAN"
+  address: "SITUS_ADDR"
+  year_built: "YEAR_BUILT"
+  assessed_total: "TOT_VALUE"
+
+# LA land use code mapping
+land_use_categories:
+  "Low Residential": residential_low
+  "Low Medium I Residential": residential_low_medium
+  "Low Medium II Residential": residential_medium
+  "Medium Residential": residential_medium
+  "High Medium Residential": residential_high_medium
+  "High Residential": residential_high
+  "Neighborhood Commercial": commercial_neighborhood
+  "Community Commercial": commercial_community
+  "Regional Commercial": commercial_regional
+  "Limited Industrial": industrial_limited
+  "Light Industrial": industrial_light
+  "Heavy Industrial": industrial_heavy
+  "Open Space": open_space
+  "Public Facilities": public
+
+# LA Zoning Code constraints (LAMC Chapter 1)
+zoning_constraints:
+  # Residential Zones
+  A1: { max_far: 0.45, max_height_ft: 30, max_stories: 2 }
+  A2: { max_far: 0.45, max_height_ft: 30, max_stories: 2 }
+  RE40: { max_far: 0.25, max_height_ft: 36, max_stories: 2 }
+  RE20: { max_far: 0.35, max_height_ft: 36, max_stories: 2 }
+  RE15: { max_far: 0.45, max_height_ft: 36, max_stories: 2 }
+  RE11: { max_far: 0.5, max_height_ft: 36, max_stories: 2 }
+  RE9: { max_far: 0.6, max_height_ft: 36, max_stories: 2 }
+  RS: { max_far: 0.6, max_height_ft: 36, max_stories: 2 }
+  R1: { max_far: 0.6, max_height_ft: 33, max_stories: 2 }
+  RU: { max_far: 0.6, max_height_ft: 36, max_stories: 2 }
+  RZ2.5: { max_far: 0.6, max_height_ft: 36, max_stories: 2 }
+  RZ3: { max_far: 0.6, max_height_ft: 36, max_stories: 2 }
+  RZ4: { max_far: 0.6, max_height_ft: 36, max_stories: 2 }
+  RW1: { max_far: 0.7, max_height_ft: 30, max_stories: 2 }
+  R2: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  RD1.5: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  RD2: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  RD3: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  RD4: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  RD5: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  RD6: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  RW2: { max_far: 1.5, max_height_ft: 30, max_stories: 2 }
+  R3: { max_far: 3.0, max_height_ft: 45, max_stories: 3 }
+  RAS3: { max_far: 3.0, max_height_ft: 50, max_stories: 3 }
+  R4: { max_far: 3.0, max_height_ft: 75, max_stories: 6 }
+  RAS4: { max_far: 3.0, max_height_ft: 75, max_stories: 6 }
+  R5: { max_far: 13.0, max_height_ft: null, max_stories: null }
+  
+  # Commercial Zones
+  CR: { max_far: 1.5, max_height_ft: 45, max_stories: 2 }
+  C1: { max_far: 1.5, max_height_ft: 45, max_stories: 2 }
+  C1.5: { max_far: 1.5, max_height_ft: 45, max_stories: 3 }
+  C2: { max_far: 1.5, max_height_ft: 75, max_stories: 6 }
+  C4: { max_far: 1.5, max_height_ft: 75, max_stories: 6 }
+  C5: { max_far: 6.0, max_height_ft: null }
+  CM: { max_far: 1.5, max_height_ft: 45 }
+  
+  # Manufacturing Zones
+  MR1: { max_far: 1.5, max_height_ft: 45 }
+  M1: { max_far: 1.5, max_height_ft: null }
+  MR2: { max_far: 3.0, max_height_ft: 75 }
+  M2: { max_far: 3.0, max_height_ft: null }
+  M3: { max_far: 6.0, max_height_ft: null }
+
+visualization:
+  parcel_colors:
+    residential: "#4CAF50"
+    commercial: "#2196F3"
+    industrial: "#FF9800"
+    mixed: "#9C27B0"
+    open_space: "#8BC34A"
+    public: "#E91E63"

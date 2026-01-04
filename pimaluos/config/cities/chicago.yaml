@@ -1,0 +1,94 @@
+# Chicago Configuration
+# Data source: Chicago Data Portal (data.cityofchicago.org)
+
+name: Chicago
+display_name: "Chicago, IL"
+state: IL
+country: USA
+
+geographic:
+  bounds: [-87.940101, 41.644335, -87.524044, 42.023131]
+  center: [-87.6298, 41.8781]
+  default_zoom: 12
+  crs: "EPSG:3435"  # IL State Plane East
+
+# Official City of Chicago Data Portal Sources
+data_sources:
+  # Cook County Parcels
+  parcels:
+    name: "Cook County Parcels"
+    url: "https://data.cityofchicago.org/api/geospatial/a2za-3d2r?method=export&format=GeoJSON"
+    format: geojson
+    description: "Property parcels in Chicago"
+    update_frequency: "Quarterly"
+    
+  # Chicago Zoning Districts
+  zoning:
+    name: "Zoning Districts"
+    url: "https://data.cityofchicago.org/api/geospatial/7cve-ehbz?method=export&format=GeoJSON"
+    format: geojson
+    description: "Chicago zoning district boundaries"
+    
+  # Building Footprints
+  buildings:
+    name: "Building Footprints"
+    url: "https://data.cityofchicago.org/api/geospatial/syp8-uezg?method=export&format=GeoJSON"
+    format: geojson
+    description: "Chicago building footprints"
+    
+  # Street Centerlines
+  streets:
+    name: "Street Centerlines"
+    url: "https://data.cityofchicago.org/api/geospatial/6imu-meau?method=export&format=GeoJSON"
+    format: geojson
+    description: "Chicago street network"
+
+# Column mapping from Chicago data to standard fields
+column_mapping:
+  parcel_id: "PIN"
+  lot_area_sqft: "SQFT"
+  zone_district: "ZONE_CLASS"
+  land_use: "CLASS"
+  address: "ADDRESS"
+  assessed_total: "ASSESSED_VALUE"
+
+# Chicago zoning code mapping
+land_use_categories:
+  "1": residential_single
+  "2": residential_multi
+  "3": commercial
+  "4": industrial
+  "5": agricultural
+  "6": exempt
+  "0": vacant
+
+# Chicago Zoning Ordinance constraints
+zoning_constraints:
+  RS-1: { max_far: 0.5, max_height_ft: 30, max_stories: 2 }
+  RS-2: { max_far: 0.65, max_height_ft: 30, max_stories: 2 }
+  RS-3: { max_far: 0.9, max_height_ft: 35, max_stories: 2 }
+  RT-3.5: { max_far: 1.05, max_height_ft: 38, max_stories: 3 }
+  RT-4: { max_far: 1.2, max_height_ft: 45, max_stories: 4 }
+  RM-4.5: { max_far: 1.7, max_height_ft: 47, max_stories: 4 }
+  RM-5: { max_far: 2.0, max_height_ft: 50, max_stories: 5 }
+  RM-5.5: { max_far: 2.5, max_height_ft: 55, max_stories: 5 }
+  RM-6: { max_far: 4.4, max_height_ft: 65, max_stories: 6 }
+  RM-6.5: { max_far: 6.6, max_height_ft: 80, max_stories: 8 }
+  B1-1: { max_far: 1.0, max_height_ft: 35 }
+  B2-3: { max_far: 2.2, max_height_ft: 50 }
+  B3-5: { max_far: 5.0, max_height_ft: 80 }
+  C1-3: { max_far: 2.2, max_height_ft: 50 }
+  C2-5: { max_far: 5.0, max_height_ft: 80 }
+  DC: { max_far: 16.0, max_height_ft: null }
+  DX: { max_far: 12.0, max_height_ft: null }
+  M1-1: { max_far: 1.0, max_height_ft: 35 }
+  M2-3: { max_far: 2.2, max_height_ft: 50 }
+  PMD: { max_far: 3.0, max_height_ft: 65 }
+
+visualization:
+  parcel_colors:
+    residential: "#4CAF50"
+    commercial: "#2196F3"
+    industrial: "#FF9800"
+    mixed: "#9C27B0"
+    open_space: "#8BC34A"

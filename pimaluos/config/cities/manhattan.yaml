@@ -1,0 +1,104 @@
+# Manhattan, NYC Configuration
+# Data source: NYC Open Data (data.cityofnewyork.us)
+
+name: Manhattan
+display_name: "Manhattan, NYC"
+state: NY
+country: USA
+
+geographic:
+  bounds: [-74.047285, 40.679548, -73.906982, 40.882214]
+  center: [-73.9712, 40.7831]
+  default_zoom: 14
+  crs: "EPSG:2263"  # NY State Plane Long Island
+
+# Official NYC Open Data Sources
+data_sources:
+  # MapPLUTO - Primary Land Use Tax Lot Output
+  # Contains lot-level geographic, land use, and tax data
+  parcels:
+    name: "MapPLUTO"
+    url: "https://data.cityofnewyork.us/api/geospatial/evjd-dqpz?method=export&format=GeoJSON"
+    format: geojson
+    description: "Primary Land Use Tax Lot Output for NYC"
+    update_frequency: "Annually"
+    
+  # NYC Zoning Features
+  zoning:
+    name: "NYC Zoning Districts"
+    url: "https://data.cityofnewyork.us/api/geospatial/dazs-pvnk?method=export&format=GeoJSON"
+    format: geojson
+    description: "Zoning district boundaries"
+    
+  # Building Footprints
+  buildings:
+    name: "Building Footprints"
+    url: "https://data.cityofnewyork.us/api/geospatial/nqwf-w8eh?method=export&format=GeoJSON"
+    format: geojson
+    description: "3D building footprints with height"
+    
+  # LION Street Network
+  streets:
+    name: "LION Street Network"
+    url: "https://data.cityofnewyork.us/api/geospatial/2v4z-66xt?method=export&format=GeoJSON"
+    format: geojson
+    description: "NYC street centerlines"
+
+# Column mapping from NYC data to standard fields
+column_mapping:
+  parcel_id: "BBL"
+  lot_area_sqft: "LotArea"
+  built_far: "BuiltFAR"
+  max_far: "ResidFAR"
+  zone_district: "ZoneDist1"
+  land_use: "LandUse"
+  building_class: "BldgClass"
+  num_floors: "NumFloors"
+  year_built: "YearBuilt"
+  address: "Address"
+  owner_name: "OwnerName"
+  assessed_total: "AssessTot"
+
+# Land use code mapping (NYC MapPLUTO codes)
+land_use_categories:
+  "01": one_two_family
+  "02": multi_family_walkup
+  "03": multi_family_elevator
+  "04": mixed_residential_commercial
+  "05": commercial_office
+  "06": industrial_manufacturing
+  "07": transportation_utility
+  "08": public_facilities
+  "09": open_space
+  "10": parking
+  "11": vacant_land
+
+# Legal zoning constraints (NYC Zoning Resolution)
+zoning_constraints:
+  R1: { max_far: 0.5, max_height_ft: 35, max_stories: 2 }
+  R2: { max_far: 0.5, max_height_ft: 35, max_stories: 2 }
+  R3: { max_far: 0.5, max_height_ft: 35, max_stories: 2 }
+  R4: { max_far: 0.75, max_height_ft: 35, max_stories: 2 }
+  R5: { max_far: 1.25, max_height_ft: 40, max_stories: 4 }
+  R6: { max_far: 2.0, max_height_ft: 65, max_stories: 6 }
+  R7: { max_far: 3.44, max_height_ft: 85, max_stories: 8 }
+  R8: { max_far: 6.02, max_height_ft: 120, max_stories: 12 }
+  R9: { max_far: 7.52, max_height_ft: 145, max_stories: 15 }
+  R10: { max_far: 10.0, max_height_ft: 185, max_stories: 20 }
+  C1: { max_far: 1.0, max_height_ft: null }
+  C2: { max_far: 2.0, max_height_ft: null }
+  C4: { max_far: 3.4, max_height_ft: 125, max_stories: 12 }
+  C5: { max_far: 10.0, max_height_ft: null }
+  C6: { max_far: 15.0, max_height_ft: null }
+  M1: { max_far: 1.0, max_height_ft: 60 }
+  M2: { max_far: 2.0, max_height_ft: 60 }
+  M3: { max_far: 2.0, max_height_ft: 60 }
+
+visualization:
+  parcel_colors:
+    residential: "#4CAF50"
+    commercial: "#2196F3"
+    industrial: "#FF9800"
+    mixed: "#9C27B0"
+    open_space: "#8BC34A"
+    vacant: "#9E9E9E"
