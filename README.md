@@ -37,7 +37,7 @@
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_USERNAME/PIMALUOS.git
+git clone https://github.com/paryapayami/PIMALUOS.git
 cd PIMALUOS
 
 # Create environment
@@ -124,7 +124,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 
 ```bash
 # Clone
-git clone https://github.com/YOUR_USERNAME/PIMALUOS.git
+git clone https://github.com/paryapayami/PIMALUOS.git
 cd PIMALUOS
 
 # Create environment
