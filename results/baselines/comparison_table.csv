@@ -1,5 +1,0 @@
-Method,Economic↑,Diversity↑,Violations↓,Env. Impact↓,Gini↓,Time(s)
-Random,187637,0.800,0.0,1.876,0.060,0.00
-Rule Based,185910,0.386,0.0,1.859,0.066,0.00
-Greedy,187112,0.448,0.0,1.871,0.063,0.00
-Pimaluos,190772,-0.000,0.0,1.908,0.046,11.39

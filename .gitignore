@@ -73,3 +73,17 @@ FINAL_SUBMISSION.tex
 Sources/
 *.bib
 docs/
+
+# Development iterations and experiments
+results/
+experiments/
+scripts/
+tests/
+examples/
+notebooks/
+dashboard/
+index.html
+*.backup
+*_old.py
+verify_edges.py
+download_manhattan_data*.py
