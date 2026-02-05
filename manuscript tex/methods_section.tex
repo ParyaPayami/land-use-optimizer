@@ -1,0 +1,98 @@
+\section{Methods}
+\label{sec:methods}
+
+PIMALUOS implements a modular "Sense-Reason-Verify" architecture that integrates heterogeneous graph learning, retrieval-augmented generation, multi-agent simulation, and physics-based validation. The framework is organized into four logical layers: Perception, Knowledge, Reasoning, and Verification.
+
+\subsection{Perception Layer: Heterogeneous Graph Construction}
+
+The Perception Layer transforms raw urban data into a structured graph representation. We model the city as a heterogeneous graph $G = (V, E, \mathcal{T}_v, \mathcal{T}_e)$, where $V$ represents land parcels.
+
+\subsubsection{Node Features}
+Each parcel node $v_i \in V$ is initialized with a 47-dimensional feature vector $\mathbf{x}_i$ containing:
+\begin{itemize}
+    \item \textbf{Geometry}: Lot area, frontage, depth, irregularity factor
+    \item \textbf{Built Environment}: Building class, year built, units, floor area
+    \item \textbf{Economics}: Assessed land/total value, tax class, recent sale price
+    \item \textbf{Location}: Coordinates, borough code, block/lot IDs
+\end{itemize}
+
+\subsubsection{Edge Types}
+We define five distinct edge types $\mathcal{T}_e$ to capture complex urban relationships:
+\begin{enumerate}
+    \item \textbf{Spatial Adjacency} ($E_{adj}$): connects physical neighbors sharing a boundary.
+    \item \textbf{Visual Connectivity} ($E_{vis}$): connects parcels within line-of-sight (calculated via ray casting).
+    \item \textbf{Functional Similarity} ($E_{fun}$): connects parcels with identical land-use codes (e.g., commercial-to-commercial).
+    \item \textbf{Infrastructure} ($E_{inf}$): connects parcels sharing utility corridors or transit access.
+    \item \textbf{Regulatory Coupling} ($E_{reg}$): connects parcels governed by the same specific zoning district regulations.
+\end{enumerate}
+
+\subsection{Knowledge Layer: RAG Constraint Extraction}
+
+To bridge the gap between unstructured legal text and computable constraints, we employ a Retrieval-Augmented Generation (RAG) pipeline.
+
+\begin{enumerate}
+    \item \textbf{Indexing}: The NYC Zoning Resolution is chunked into semantic segments and embedded using OpenAI's `text-embedding-3-small`. Embeddings are stored in a FAISS vector index.
+    \item \textbf{Retrieval}: For a given zoning district (e.g., "R6"), the system retrieves the top-$k$ relevant text chunks.
+    \item \textbf{Extraction}: A Large Language Model (GPT-4 or Llama-2 via Ollama) processes retrieved chunks to extract structured constraints in JSON format:
+\end{enumerate}
+
+\begin{verbatim}
+{
+  "max_far": 2.43,
+  "max_height": 70,
+  "min_open_space_ratio": 0.2,
+  "permitted_uses": ["residential", "community_facility"]
+}
+\end{verbatim}
+
+These extracted constraints form the feasible action space $\mathcal{A}_i$ for each parcel.
+
+\subsection{Reasoning Layer: GNN and MARL}
+
+\subsubsection{Heterogeneous Graph Attention Network}
+We employ a Heterogeneous Graph Attention Network (HGAT) to learn parcel embeddings. The embedding $\mathbf{h}_i^{(l+1)}$ for node $i$ of type $\phi$ is computed as:
+
+\begin{equation}
+\mathbf{h}_i^{(l+1)} = \sigma \left( \sum_{e \in \mathcal{T}_e} \sum_{j \in \mathcal{N}_i^e} \alpha_{ij}^e \mathbf{W}_e \mathbf{h}_j^{(l)} \right)
+\end{equation}
+
+where $\alpha_{ij}^e$ represents the attention weight for edge type $e$, enabling the model to learn the relative importance of spatial vs. functional vs. regulatory connections.
+
+\subsubsection{Multi-Agent Negotiation}
+The land-use assignment problem is modeled as a localized game played by five stakeholder agents for each parcel. The agents optimize modified utility functions:
+
+\begin{itemize}
+    \item \textbf{Resident}: $U_{res} = w_1(\text{Affordability}) + w_2(\text{AmenityAccess})$
+    \item \textbf{Developer}: $U_{dev} = w_1(\text{ProfitMargin}) - w_2(\text{Risk})$
+    \item \textbf{City Planner}: $U_{city} = w_1(\text{TaxBase}) - w_2(\text{Congestion})$
+    \item \textbf{Environmentalist}: $U_{env} = w_1(\text{GreenSpace}) - w_2(\text{Runoff})$
+    \item \textbf{Equity Advocate}: $U_{eq} = -w_1(\text{Displacement}) + w_2(\text{ServiceDistribution})$
+\end{itemize}
+
+Agents employ Proximal Policy Optimization (PPO) to learn negotiation strategies contributing to a Nash equilibrium.
+
+\subsection{Verification Layer: Physics-Informed Validation}
+
+Proposed configurations are validated against physics-based models to ensure infrastructure feasibility.
+
+\subsubsection{Traffic Simulation (BPR)}
+Link travel times are estimated using the Bureau of Public Roads function:
+\begin{equation}
+t_a = t_0 \left( 1 + \alpha \left( \frac{V_a}{C_a} \right)^\beta \right)
+\end{equation}
+Violating a congestion threshold ($V/C > 1.5$) triggers a penalty term in the reward function.
+
+\subsubsection{Hydrology (Rational Method)}
+Peak stormwater runoff $Q$ is calculated as $Q = C \cdot I \cdot A$. If the aggregate runoff exceeds the drainage capacity of the local sewer shed, a physics penalty is applied.
+
+\subsubsection{Solar Access}
+Geometric shadow casting estimates solar deprivation. Building massings are extruded, and shadow volumes are computed for the winter solstice. Configurations blocking $>50\%$ of direct sunlight to neighbors are penalized.
+
+\subsection{Optimization Framework}
+The complete system seeks a configuration $\mathbf{S}^*$ that maximizes the weighted sum of agent utilities while satisfying all hard constraints (Zoning, Physics):
+
+\begin{equation}
+\mathbf{S}^* = \arg\max_{\mathbf{S}} \sum_{i \in V} \sum_{a \in Agents} \lambda_a U_{a}(S_i) - \gamma \sum_{k \in Constraints} \max(0, g_k(\mathbf{S}))
+\end{equation}
+
+Pareto optimization via NSGA-III is used to explore the trade-off frontier between conflicting stakeholder objectives.

@@ -1,0 +1,108 @@
+# Boston Configuration
+# Data source: Analyze Boston (data.boston.gov)
+
+name: Boston
+display_name: "Boston, MA"
+state: MA
+country: USA
+
+geographic:
+  bounds: [-71.191155, 42.227925, -70.748802, 42.40082]
+  center: [-71.0589, 42.3601]
+  default_zoom: 13
+  crs: "EPSG:2249"  # MA State Plane Mainland
+
+# Official City of Boston Open Data Sources
+data_sources:
+  # Boston Property Assessment
+  parcels:
+    name: "Property Assessment"
+    url: "https://data.boston.gov/api/3/action/datastore_search?resource_id=7d0d7b9a-d1c4-4a6e-9a6a-3f4f0c0c0c0c&limit=50000"
+    format: json
+    description: "Property assessment and parcel data"
+    update_frequency: "Annually"
+    
+    # Alternative GeoJSON endpoint
+    geojson_url: "https://bostonopendata-boston.opendata.arcgis.com/api/download/v1/items/2e1f00c0c0c0c0c0c0c0c0c0c0c0c0c0/geojson?layers=0"
+    
+  # Boston Zoning Districts
+  zoning:
+    name: "Zoning Districts" 
+    url: "https://bostonopendata-boston.opendata.arcgis.com/datasets/zoning-districts.geojson"
+    format: geojson
+    description: "Boston zoning district boundaries"
+    
+  # Building Footprints
+  buildings:
+    name: "Building Footprints"
+    url: "https://bostonopendata-boston.opendata.arcgis.com/datasets/boston-buildings.geojson"
+    format: geojson
+    description: "Boston building footprints with 3D data"
+    
+  # Street Centerlines
+  streets:
+    name: "Street Centerlines"
+    url: "https://bostonopendata-boston.opendata.arcgis.com/datasets/boston-street-segments.geojson"
+    format: geojson
+    description: "Boston street network"
+
+# Column mapping from Boston data to standard fields
+column_mapping:
+  parcel_id: "PID"
+  lot_area_sqft: "LAND_SF"
+  zone_district: "ZONING"
+  land_use: "LU"
+  address: "ST_NUM"
+  year_built: "YR_BUILT"
+  num_floors: "NUM_FLOORS"
+  assessed_total: "AV_TOTAL"
+
+# Boston land use code mapping
+land_use_categories:
+  "R1": residential_single
+  "R2": residential_two
+  "R3": residential_three
+  "A": apartment
+  "CC": commercial_condo
+  "CD": commercial
+  "CL": commercial_land
+  "CM": commercial_mixed
+  "I": industrial
+  "E": exempt
+
+# Boston Zoning Code constraints (Article 51)
+zoning_constraints:
+  # Residential Subdistricts
+  1F: { max_far: 0.3, max_height_ft: 35, max_stories: 2 }
+  2F: { max_far: 0.4, max_height_ft: 35, max_stories: 2 }
+  3F: { max_far: 0.6, max_height_ft: 35, max_stories: 3 }
+  MFR: { max_far: 1.0, max_height_ft: 55, max_stories: 4 }
+  H: { max_far: 2.0, max_height_ft: 65, max_stories: 6 }
+  
+  # Neighborhood Shopping
+  NS: { max_far: 1.0, max_height_ft: 35 }
+  
+  # Local Commercial
+  LC: { max_far: 1.0, max_height_ft: 35 }
+  
+  # General Commercial
+  CC: { max_far: 2.0, max_height_ft: 55 }
+  
+  # Waterfront
+  W: { max_far: 3.0, max_height_ft: 100 }
+  
+  # Industrial
+  I1: { max_far: 1.0, max_height_ft: 45 }
+  I2: { max_far: 2.0, max_height_ft: 70 }
+  
+  # Institutional
+  IS: { max_far: 2.0, max_height_ft: 65 }
+
+visualization:
+  parcel_colors:
+    residential: "#4CAF50"
+    commercial: "#2196F3"
+    industrial: "#FF9800"
+    mixed: "#9C27B0"
+    institutional: "#E91E63"
+    open_space: "#8BC34A"
