@@ -75,7 +75,10 @@ Sources/
 docs/
 
 # Development iterations and experiments
-results/
+results/ablation/
+results/baselines/
+results/figures/
+results/small_scale_demo/
 experiments/
 scripts/
 tests/
