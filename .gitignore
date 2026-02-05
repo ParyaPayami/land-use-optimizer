@@ -63,3 +63,13 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Manuscript and academic content (keep private)
+manuscript tex/
+manuscript tex.zip
+MANUSCRIPT_CHANGES.tex
+MANUSCRIPT_UPDATES.md
+FINAL_SUBMISSION.tex
+Sources/
+*.bib
+docs/references.bib
