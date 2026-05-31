@@ -412,13 +412,33 @@ def run_baseline_comparison(
     if pimaluos_no_gnn_data:
         methods.append('pimaluos_no_gnn')
     
+    # Reference for Cohen's d
+    if 'greedy' in results:
+        greedy_mean_econ = results['greedy']['mean']['economic_value']
+        greedy_std_econ = results['greedy']['std']['economic_value'] if 'std' in results['greedy'] else 0.0
+    else:
+        greedy_mean_econ = 0.0
+        greedy_std_econ = 0.0
+
     for method in methods:
         mean = results[method]['mean']
         std = results[method].get('std', {k: 0.0 for k in mean.keys()})
         
+        # Calculate Cohen's d for economic value vs Greedy
+        if method == 'greedy':
+            cohens_d = "N/A"
+        else:
+            pooled_std = np.sqrt((std['economic_value']**2 + greedy_std_econ**2) / 2)
+            if pooled_std == 0:
+                cohens_d = "N/A"
+            else:
+                d = (mean['economic_value'] - greedy_mean_econ) / pooled_std
+                cohens_d = f"{d:.3f}"
+        
         row = {
             'Method': method.replace('_', ' ').title(),
             'Economic↑': f"{mean['economic_value']:.0f}±{std['economic_value']:.0f}",
+            'Effect Size(d)': cohens_d,
             'Diversity↑': f"{mean['diversity_entropy']:.3f}±{std['diversity_entropy']:.3f}",
             'Violations↓': f"{mean['constraint_violations']:.0f}±{std['constraint_violations']:.0f}",
             'Env. Impact↓': f"{mean['environmental_impact']:.3f}±{std['environmental_impact']:.3f}",
