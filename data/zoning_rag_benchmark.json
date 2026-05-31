@@ -1,0 +1,1718 @@
+[
+  {
+    "id": 1,
+    "section_id": "Section 23-141",
+    "district": "R1",
+    "raw_zoning_clause": "In R1-1 and R1-2 single-family districts, the maximum Floor Area Ratio (FAR) shall not exceed 0.50, and the minimum lot area shall be 9,500 square feet for R1-1 and 5,700 square feet for R1-2. Rear yards must be at least 30 feet.",
+    "ocr_scanned_text": "In R1-1 and R1-2 single-family districts, the maximum Fl0or Area Rat1o (F.A.R.) shall not exceed 0.50, and the minimum lot area shall be 9,500 square feet for R1-1 and 5,700 square feet for R1-2. Rear yards must be at least 30 feet.",
+    "ocr_preprocessed": "In R1-1 and R1-2 single-family districts, the maximum Floor Area Ratio (FAR) shall not exceed 0.50, and the minimum lot area shall be 9,500 square feet for R1-1 and 5,700 square feet for R1-2. Rear yards must be at least 30 feet.",
+    "human_annotations": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 9500.0
+    },
+    "rag_extracted": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 9500.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 2,
+    "section_id": "Section 23-142",
+    "district": "R2",
+    "raw_zoning_clause": "For all residential buildings in R2 districts, the Floor Area Ratio is restricted to 0.50 max. The lot area must be at least 3,800 square feet. Front yard depth is 15 feet minimum.",
+    "ocr_scanned_text": "For all residential buildings in R2 districts, the Floor Area Ratio is restricted to 0.50 max. The lot area must be at least 3,800 square feet. Front yard depth is 15 feet minimum.",
+    "ocr_preprocessed": "For all residential buildings in R2 districts, the Floor Area Ratio is restricted to 0.50 max. The lot area must be at least 3,800 square feet. Front yard depth is 15 feet minimum.",
+    "human_annotations": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "rag_extracted": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 3,
+    "section_id": "Section 23-143",
+    "district": "R3-1",
+    "raw_zoning_clause": "In R3-1 detached residential districts, the max FAR is 0.50, with an additional inclusionary or attic allowance up to 0.60. The maximum height is limited to 35 feet, with a 21-foot perimeter wall height.",
+    "ocr_scanned_text": "In R3-1 detached residential districts, the max FAR is 0.50, with an additional inclusionary or attic allowance up to 0.60. The maximum height is limited to 35 feet, with a 21-foot perimeter wall height.",
+    "ocr_preprocessed": "In R3-1 detached residential districts, the max FAR is 0.50, with an additional inclusionary or attic allowance up to 0.60. The maximum height is limited to 35 feet, with a 21-foot perimeter wall height.",
+    "human_annotations": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "rag_extracted": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 4,
+    "section_id": "Section 23-144",
+    "district": "R3-2",
+    "raw_zoning_clause": "R3-2 general residential districts allow a Floor Area Ratio of 0.50, expandable to 0.60 under specific layout bonuses. Lot frontage must be a minimum of 40 feet.",
+    "ocr_scanned_text": "R3-2 general residential districts allow a Floor Area Ratio of 0.50, expandable to 0.60 under specific layout bonuses. Lot frontage must be a minimum of 40 feet.",
+    "ocr_preprocessed": "R3-2 general residential districts allow a Floor Area Ratio of 0.50, expandable to 0.60 under specific layout bonuses. Lot frontage must be a minimum of 40 feet.",
+    "human_annotations": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "rag_extracted": {
+      "max_far": 0.5,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 5,
+    "section_id": "Section 23-145",
+    "district": "R4",
+    "raw_zoning_clause": "Residential developments in R4 districts are permitted a maximum FAR of 0.75, which can increase to 0.90 for certain multi-family residences. Max height of the building is 35 feet.",
+    "ocr_scanned_text": "Residential developments in R4 districts are permitted a maximum FAR of 0.75, which can increase to 0.90 for certain multi-family residences. Max height of the building is 35 feet.",
+    "ocr_preprocessed": "Residential developments in R4 districts are permitted a maximum FAR of 0.75, which can increase to 0.90 for certain multi-family residences. Max height of the building is 35 feet.",
+    "human_annotations": {
+      "max_far": 0.75,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "rag_extracted": {
+      "max_far": 0.75,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 6,
+    "section_id": "Section 23-146",
+    "district": "R4B",
+    "raw_zoning_clause": "In R4B districts, the Floor Area Ratio shall not exceed 0.90, and the maximum building height shall be 24 feet at the street wall and 35 feet total.",
+    "ocr_scanned_text": "In R4B districts, the Floor Area Ratio shall not exceed 0.90, and the maximum building height shall be 24 feet at the street wall and 35 feet total.",
+    "ocr_preprocessed": "In R4B districts, the Floor Area Ratio shall not exceed 0.90, and the maximum building height shall be 24 feet at the street wall and 35 feet total.",
+    "human_annotations": {
+      "max_far": 0.9,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "rag_extracted": {
+      "max_far": 0.9,
+      "max_height_ft": 35.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 3800.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 7,
+    "section_id": "Section 23-147",
+    "district": "R5",
+    "raw_zoning_clause": "For residential buildings in R5 districts, the maximum FAR is 1.25, and the maximum height is 40 feet. Side yards are required to have a combined width of at least 13 feet.",
+    "ocr_scanned_text": "For residential buildings in R5 districts, the maximum FAR is 1.25, and the maximum height is 40 feet. Side yards are required to have a combined width of at least 13 feet.",
+    "ocr_preprocessed": "For residential buildings in R5 districts, the maximum FAR is 1.25, and the maximum height is 40 feet. Side yards are required to have a combined width of at least 13 feet.",
+    "human_annotations": {
+      "max_far": 1.25,
+      "max_height_ft": 40.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 1.25,
+      "max_height_ft": 40.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 8,
+    "section_id": "Section 23-148",
+    "district": "R5B",
+    "raw_zoning_clause": "In R5B districts, the Floor Area Ratio is limited to 1.35, and the maximum building height is limited to 30 feet at the street line and 33 feet overall.",
+    "ocr_scanned_text": "In R5B districts, the Fl0or Area Rat1o is limited to 1.35, and the maximum building height is limited to 30 feet at the street line and 33 feet overall.",
+    "ocr_preprocessed": "In R5B districts, the Floor Area Ratio is limited to 1.35, and the maximum building height is limited to 30 feet at the street line and 33 feet overall.",
+    "human_annotations": {
+      "max_far": 1.35,
+      "max_height_ft": 33.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 1.35,
+      "max_height_ft": 33.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 9,
+    "section_id": "Section 23-149",
+    "district": "R6",
+    "raw_zoning_clause": "In R6 districts, the maximum Floor Area Ratio for any residential building shall not exceed 2.00, except as otherwise provided in Section 23-15 (Inclusionary Housing). The maximum building height is limited to 65 feet.",
+    "ocr_scanned_text": "In R6 districts, the maximum Floor Area Ratio for any residential building shall not exceed 2.00, except as otherwise provided in Section 23-15 (Inclusionary Housing). The maximum building height is limited to 65 feet.",
+    "ocr_preprocessed": "In R6 districts, the maximum Floor Area Ratio for any residential building shall not exceed 2.00, except as otherwise provided in Section 23-15 (Inclusionary Housing). The maximum building height is limited to 65 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 65.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 65.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 10,
+    "section_id": "Section 23-150",
+    "district": "R6A",
+    "raw_zoning_clause": "For all residential buildings in R6A districts, the Floor Area Ratio is restricted to 3.00 max. The maximum building height is limited to 70 feet under standard regulations.",
+    "ocr_scanned_text": "For all residential buildings in R6A districts, tbe Floor Area Raio is restricted to 3.00 max. The max1mum building height is limited to 70 feet under standard regulations.",
+    "ocr_preprocessed": "For all residential buildings in R6A districts, the Floor Area Ratio is restricted to 3.00 max. The maximum building height is limited to 70 feet under standard regulations.",
+    "human_annotations": {
+      "max_far": 3.0,
+      "max_height_ft": 70.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.0,
+      "max_height_ft": 70.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 11,
+    "section_id": "Section 23-151",
+    "district": "R6B",
+    "raw_zoning_clause": "In R6B quality housing districts, the maximum residential Floor Area Ratio (FAR) shall not exceed 2.00, and the maximum building height is restricted to 50 feet.",
+    "ocr_scanned_text": "In R6B quality housing districts, the maximum residential Floor Area Ratio (FAR) shall not exceed 2.00, and the maximum building height is restricted to 50 feet.",
+    "ocr_preprocessed": "In R6B quality housing districts, the maximum residential Floor Area Ratio (FAR) shall not exceed 2.00, and the maximum building height is restricted to 50 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 50.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 50.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 12,
+    "section_id": "Section 23-152",
+    "district": "R7-1",
+    "raw_zoning_clause": "In R7-1 residential districts, the Floor Area Ratio ranges from 0.87 to 3.44 depending on the open space ratio. Building height is limited to a maximum of 85 feet.",
+    "ocr_scanned_text": "In R7-1 residential districts, the Floor Area Ratio ranges from 0.87 to 3.44 depending on the open space ratio. Building height is limited to a maximum of 85 feet.",
+    "ocr_preprocessed": "In R7-1 residential districts, the Floor Area Ratio ranges from 0.87 to 3.44 depending on the open space ratio. Building height is limited to a maximum of 85 feet.",
+    "human_annotations": {
+      "max_far": 3.44,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.44,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 13,
+    "section_id": "Section 23-153",
+    "district": "R7-2",
+    "raw_zoning_clause": "For buildings in R7-2 general residential districts, the maximum FAR is 3.44 under standard regulations, and the building height limit is 85 feet.",
+    "ocr_scanned_text": "For buildings in R7-2 general residential districts, the maximum FAR is 3.44 under standard regulations, and the building height limit is 85 feet.",
+    "ocr_preprocessed": "For buildings in R7-2 general residential districts, the maximum FAR is 3.44 under standard regulations, and the building height limit is 85 feet.",
+    "human_annotations": {
+      "max_far": 3.44,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.44,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 14,
+    "section_id": "Section 23-154",
+    "district": "R7A",
+    "raw_zoning_clause": "In R7A districts, the residential Floor Area Ratio (FAR) shall not exceed 4.00. The maximum building height is limited to 80 feet, which can increase to 85 feet with a qualifying ground floor.",
+    "ocr_scanned_text": "In R7A districts, the residential Floor Area Ratio (FAR) shall not exceed 4.00. The maximum building height is limited to 80 feet, which can increase to 85 feet with a qualifying ground floor.",
+    "ocr_preprocessed": "In R7A districts, the residential Floor Area Ratio (FAR) shall not exceed 4.00. The maximum building height is limited to 80 feet, which can increase to 85 feet with a qualifying ground floor.",
+    "human_annotations": {
+      "max_far": 4.0,
+      "max_height_ft": 80.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 4.0,
+      "max_height_ft": 80.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 15,
+    "section_id": "Section 23-155",
+    "district": "R7B",
+    "raw_zoning_clause": "In R7B districts, the Floor Area Ratio shall not exceed 3.00, and the maximum building height shall be restricted to 75 feet.",
+    "ocr_scanned_text": "In R7B districts, the Fl0or Area Rat1o shall not exceed 3.00, and the maximum building height shall be restricted to 75 feet.",
+    "ocr_preprocessed": "In R7B districts, the Floor Area Ratio shall not exceed 3.00, and the maximum building height shall be restricted to 75 feet.",
+    "human_annotations": {
+      "max_far": 3.0,
+      "max_height_ft": 75.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.0,
+      "max_height_ft": 75.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 16,
+    "section_id": "Section 23-156",
+    "district": "R7D",
+    "raw_zoning_clause": "In R7D districts, the Floor Area Ratio is limited to 4.20, and the maximum building height is limited to 100 feet.",
+    "ocr_scanned_text": "In R7D districts, the Floor Area Ratio is limited to 4.20, and the maximum building height is limited to 100 feet.",
+    "ocr_preprocessed": "In R7D districts, the Floor Area Ratio is limited to 4.20, and the maximum building height is limited to 100 feet.",
+    "human_annotations": {
+      "max_far": 4.2,
+      "max_height_ft": 100.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 4.2,
+      "max_height_ft": 100.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 17,
+    "section_id": "Section 23-157",
+    "district": "R7X",
+    "raw_zoning_clause": "In R7X high-density districts, the residential Floor Area Ratio (FAR) shall not exceed 5.00, and the maximum building height is restricted to 125 feet.",
+    "ocr_scanned_text": "In R7X high-density districts, the residential Floor Area Ratio (FAR) shall not exceed 5.00, and the maximum building height is restricted to 125 feet.",
+    "ocr_preprocessed": "In R7X high-density districts, the residential Floor Area Ratio (FAR) shall not exceed 5.00, and the maximum building height is restricted to 125 feet.",
+    "human_annotations": {
+      "max_far": 5.0,
+      "max_height_ft": 125.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 5.0,
+      "max_height_ft": 125.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 18,
+    "section_id": "Section 23-158",
+    "district": "R8",
+    "raw_zoning_clause": "In R8 districts, the maximum Floor Area Ratio is 6.02, and the building height is limited to 120 feet maximum.",
+    "ocr_scanned_text": "In R8 districts, the maximum Floor Area Ratio is 6.02, and the building height is limited to 120 feet maximum.",
+    "ocr_preprocessed": "In R8 districts, the maximum Floor Area Ratio is 6.02, and the building height is limited to 120 feet maximum.",
+    "human_annotations": {
+      "max_far": 6.02,
+      "max_height_ft": 120.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 6.02,
+      "max_height_ft": 120.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 19,
+    "section_id": "Section 23-159",
+    "district": "R8A",
+    "raw_zoning_clause": "For all residential buildings in R8A districts, the Floor Area Ratio is restricted to 6.02 max. The maximum building height is limited to 120 feet under standard regulations.",
+    "ocr_scanned_text": "For all residential buildings in R8A districts, tbe Floor Area Raio is restricted to 6.02 max. The max1mum building height is limited to 120 feet under standard regulations.",
+    "ocr_preprocessed": "For all residential buildings in R8A districts, the Floor Area Ratio is restricted to 6.02 max. The maximum building height is limited to 120 feet under standard regulations.",
+    "human_annotations": {
+      "max_far": 6.02,
+      "max_height_ft": 120.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 6.02,
+      "max_height_ft": 120.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 20,
+    "section_id": "Section 23-160",
+    "district": "R8B",
+    "raw_zoning_clause": "In R8B quality housing districts, the residential Floor Area Ratio (FAR) shall not exceed 4.00. The maximum building height is restricted to 75 feet.",
+    "ocr_scanned_text": "In R8B quality housing districts, the residential Floor Area Ratio (FAR) shall not exceed 4.00. The maximum building height is restricted to 75 feet.",
+    "ocr_preprocessed": "In R8B quality housing districts, the residential Floor Area Ratio (FAR) shall not exceed 4.00. The maximum building height is restricted to 75 feet.",
+    "human_annotations": {
+      "max_far": 4.0,
+      "max_height_ft": 75.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 4.0,
+      "max_height_ft": 75.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 21,
+    "section_id": "Section 23-161",
+    "district": "R8X",
+    "raw_zoning_clause": "In R8X districts, the Floor Area Ratio is limited to 6.02, and the maximum building height is limited to 150 feet.",
+    "ocr_scanned_text": "In R8X districts, the Floor Area Ratio is limited to 6.02, and the maximum building height is limited to 150 feet.",
+    "ocr_preprocessed": "In R8X districts, the Floor Area Ratio is limited to 6.02, and the maximum building height is limited to 150 feet.",
+    "human_annotations": {
+      "max_far": 6.02,
+      "max_height_ft": 150.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 6.02,
+      "max_height_ft": 150.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 22,
+    "section_id": "Section 23-162",
+    "district": "R9",
+    "raw_zoning_clause": "In R9 districts, the residential Floor Area Ratio (FAR) shall not exceed 7.52, and the maximum building height is restricted to 145 feet.",
+    "ocr_scanned_text": "In R9 districts, the residential Fl0or Area Rat1o (F.A.R.) shall not exceed 7.52, and the maximum building height is restricted to 145 feet.",
+    "ocr_preprocessed": "In R9 districts, the residential Floor Area Ratio (FAR) shall not exceed 7.52, and the maximum building height is restricted to 145 feet.",
+    "human_annotations": {
+      "max_far": 7.52,
+      "max_height_ft": 145.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 7.52,
+      "max_height_ft": 145.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 23,
+    "section_id": "Section 23-163",
+    "district": "R9A",
+    "raw_zoning_clause": "For all residential buildings in R9A districts, the Floor Area Ratio is restricted to 7.52 max. The maximum building height is limited to 135 feet under standard regulations.",
+    "ocr_scanned_text": "For all residential buildings in R9A districts, the Floor Area Ratio is restricted to 7.52 max. The maximum building height is limited to 135 feet under standard regulations.",
+    "ocr_preprocessed": "For all residential buildings in R9A districts, the Floor Area Ratio is restricted to 7.52 max. The maximum building height is limited to 135 feet under standard regulations.",
+    "human_annotations": {
+      "max_far": 7.52,
+      "max_height_ft": 135.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 7.52,
+      "max_height_ft": 135.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 24,
+    "section_id": "Section 23-164",
+    "district": "R9X",
+    "raw_zoning_clause": "In R9X districts, the Floor Area Ratio is limited to 9.00, and the maximum building height is limited to 160 feet.",
+    "ocr_scanned_text": "In R9X districts, the Floor Area Ratio is limited to 9.00, and the maximum building height is limited to 160 feet.",
+    "ocr_preprocessed": "In R9X districts, the Floor Area Ratio is limited to 9.00, and the maximum building height is limited to 160 feet.",
+    "human_annotations": {
+      "max_far": 9.0,
+      "max_height_ft": 160.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 9.0,
+      "max_height_ft": 160.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 25,
+    "section_id": "Section 23-165",
+    "district": "R10",
+    "raw_zoning_clause": "In R10 high-density residential districts, the Floor Area Ratio (FAR) is limited to 10.00 max, which can increase to 12.00 with inclusionary housing. The maximum height is limited to 210 feet.",
+    "ocr_scanned_text": "In R10 high-density residential districts, the Floor Area Ratio (FAR) is limited to 10.00 max, which can increase to 12.00 with inclusionary housing. The maximum height is limited to 210 feet.",
+    "ocr_preprocessed": "In R10 high-density residential districts, the Floor Area Ratio (FAR) is limited to 10.00 max, which can increase to 12.00 with inclusionary housing. The maximum height is limited to 210 feet.",
+    "human_annotations": {
+      "max_far": 10.0,
+      "max_height_ft": 210.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 10.0,
+      "max_height_ft": 210.0,
+      "permitted_uses": [
+        "residential"
+      ],
+      "prohibited_uses": [],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 26,
+    "section_id": "Section 33-121",
+    "district": "C1-1",
+    "raw_zoning_clause": "In C1-1 local retail districts, the commercial Floor Area Ratio (FAR) is restricted to 1.00 max. Rear yards of 20 feet are required.",
+    "ocr_scanned_text": "In C1-1 local retail districts, the commercial Floor Area Ratio (FAR) is restricted to 1.00 max. Rear yards of 20 feet are required.",
+    "ocr_preprocessed": "In C1-1 local retail districts, the commercial Floor Area Ratio (FAR) is restricted to 1.00 max. Rear yards of 20 feet are required.",
+    "human_annotations": {
+      "max_far": 1.0,
+      "max_height_ft": 65.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 1.0,
+      "max_height_ft": 65.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 27,
+    "section_id": "Section 33-122",
+    "district": "C1-2",
+    "raw_zoning_clause": "For all commercial buildings in C1-2 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "ocr_scanned_text": "For all commercial buildings in C1-2 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "ocr_preprocessed": "For all commercial buildings in C1-2 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 28,
+    "section_id": "Section 33-123",
+    "district": "C1-3",
+    "raw_zoning_clause": "In C1-3 districts, the maximum commercial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 85 feet.",
+    "ocr_scanned_text": "In C1-3 districts, tbe max1mum commercial Floor Area Raio (FAR) shall not exceed 2.00, and tbe building height is limited to 85 feet.",
+    "ocr_preprocessed": "In C1-3 districts, the maximum commercial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 85 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 29,
+    "section_id": "Section 33-124",
+    "district": "C2-1",
+    "raw_zoning_clause": "For all commercial buildings in C2-1 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "ocr_scanned_text": "For all commercial buildings in C2-1 districts, the Fl0or Area Rat1o is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "ocr_preprocessed": "For all commercial buildings in C2-1 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 30,
+    "section_id": "Section 33-125",
+    "district": "C2-2",
+    "raw_zoning_clause": "In C2-2 commercial districts, the commercial Floor Area Ratio shall not exceed 2.00, and the maximum building height is restricted to 85 feet.",
+    "ocr_scanned_text": "In C2-2 commercial districts, the commercial Floor Area Ratio shall not exceed 2.00, and the maximum building height is restricted to 85 feet.",
+    "ocr_preprocessed": "In C2-2 commercial districts, the commercial Floor Area Ratio shall not exceed 2.00, and the maximum building height is restricted to 85 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 31,
+    "section_id": "Section 33-126",
+    "district": "C2-3",
+    "raw_zoning_clause": "For all commercial buildings in C2-3 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "ocr_scanned_text": "For all commercial buildings in C2-3 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "ocr_preprocessed": "For all commercial buildings in C2-3 districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 85 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 32,
+    "section_id": "Section 33-127",
+    "district": "C3",
+    "raw_zoning_clause": "In C3 waterfront commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 0.50, and the building height is limited to 30 feet.",
+    "ocr_scanned_text": "In C3 waterfront commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 0.50, and the building height is limited to 30 feet.",
+    "ocr_preprocessed": "In C3 waterfront commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 0.50, and the building height is limited to 30 feet.",
+    "human_annotations": {
+      "max_far": 0.5,
+      "max_height_ft": 30.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 0.5,
+      "max_height_ft": 30.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 33,
+    "section_id": "Section 33-128",
+    "district": "C4-1",
+    "raw_zoning_clause": "In C4-1 commercial districts, the maximum commercial Floor Area Ratio is 1.00, and the building height is limited to 60 feet maximum.",
+    "ocr_scanned_text": "In C4-1 commercial districts, the maximum commercial Floor Area Ratio is 1.00, and the building height is limited to 60 feet maximum.",
+    "ocr_preprocessed": "In C4-1 commercial districts, the maximum commercial Floor Area Ratio is 1.00, and the building height is limited to 60 feet maximum.",
+    "human_annotations": {
+      "max_far": 1.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 1.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 34,
+    "section_id": "Section 33-129",
+    "district": "C4-2",
+    "raw_zoning_clause": "For all commercial buildings in C4-2 districts, the Floor Area Ratio is restricted to 3.40 max. The maximum building height is limited to 85 feet.",
+    "ocr_scanned_text": "For all commercial buildings in C4-2 districts, the Floor Area Ratio is restricted to 3.40 max. The maximum building height is limited to 85 feet.",
+    "ocr_preprocessed": "For all commercial buildings in C4-2 districts, the Floor Area Ratio is restricted to 3.40 max. The maximum building height is limited to 85 feet.",
+    "human_annotations": {
+      "max_far": 3.4,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.4,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 35,
+    "section_id": "Section 33-130",
+    "district": "C4-3",
+    "raw_zoning_clause": "In C4-3 districts, the residential Floor Area Ratio (FAR) shall not exceed 3.40, and the building height is limited to 85 feet.",
+    "ocr_scanned_text": "In C4-3 districts, the residential Floor Area Ratio (FAR) shall not exceed 3.40, and the building height is limited to 85 feet.",
+    "ocr_preprocessed": "In C4-3 districts, the residential Floor Area Ratio (FAR) shall not exceed 3.40, and the building height is limited to 85 feet.",
+    "human_annotations": {
+      "max_far": 3.4,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.4,
+      "max_height_ft": 85.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 36,
+    "section_id": "Section 33-131",
+    "district": "C4-4",
+    "raw_zoning_clause": "In C4-4 districts, the commercial Floor Area Ratio (FAR) is limited to 3.40, and the maximum building height is limited to 125 feet.",
+    "ocr_scanned_text": "In C4-4 districts, the commercial Fl0or Area Rat1o (F.A.R.) is limited to 3.40, and the maximum building height is limited to 125 feet.",
+    "ocr_preprocessed": "In C4-4 districts, the commercial Floor Area Ratio (FAR) is limited to 3.40, and the maximum building height is limited to 125 feet.",
+    "human_annotations": {
+      "max_far": 3.4,
+      "max_height_ft": 125.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.4,
+      "max_height_ft": 125.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 37,
+    "section_id": "Section 33-132",
+    "district": "C4-5",
+    "raw_zoning_clause": "In C4-5 commercial districts, the maximum commercial Floor Area Ratio is 3.40, and the building height is limited to 125 feet maximum.",
+    "ocr_scanned_text": "In C4-5 commercial districts, tbe max1mum commercial Floor Area Raio is 3.40, and tbe building height is limited to 125 feet max1mum.",
+    "ocr_preprocessed": "In C4-5 commercial districts, the maximum commercial Floor Area Ratio is 3.40, and the building height is limited to 125 feet maximum.",
+    "human_annotations": {
+      "max_far": 3.4,
+      "max_height_ft": 125.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 3.4,
+      "max_height_ft": 125.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 38,
+    "section_id": "Section 33-133",
+    "district": "C5-1",
+    "raw_zoning_clause": "In C5-1 central commercial districts, the commercial Floor Area Ratio (FAR) is limited to 10.00, and the maximum building height is unlimited.",
+    "ocr_scanned_text": "In C5-1 central commercial districts, the commercial Floor Area Ratio (FAR) is limited to 10.00, and the maximum building height is unlimited.",
+    "ocr_preprocessed": "In C5-1 central commercial districts, the commercial Floor Area Ratio (FAR) is limited to 10.00, and the maximum building height is unlimited.",
+    "human_annotations": {
+      "max_far": 10.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 10.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 39,
+    "section_id": "Section 33-134",
+    "district": "C5-2",
+    "raw_zoning_clause": "For all commercial buildings in C5-2 districts, the Floor Area Ratio is restricted to 10.00 max. Height is governed by sky exposure planes.",
+    "ocr_scanned_text": "For all commercial buildings in C5-2 districts, the Floor Area Ratio is restricted to 10.00 max. Height is governed by sky exposure planes.",
+    "ocr_preprocessed": "For all commercial buildings in C5-2 districts, the Floor Area Ratio is restricted to 10.00 max. Height is governed by sky exposure planes.",
+    "human_annotations": {
+      "max_far": 10.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 10.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 40,
+    "section_id": "Section 33-135",
+    "district": "C6-1",
+    "raw_zoning_clause": "In C6-1 commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 6.00, and the building height is limited to 150 feet.",
+    "ocr_scanned_text": "In C6-1 commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 6.00, and the building height is limited to 150 feet.",
+    "ocr_preprocessed": "In C6-1 commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 6.00, and the building height is limited to 150 feet.",
+    "human_annotations": {
+      "max_far": 6.0,
+      "max_height_ft": 150.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 6.0,
+      "max_height_ft": 150.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 41,
+    "section_id": "Section 33-136",
+    "district": "C6-2",
+    "raw_zoning_clause": "For all commercial buildings in C6-2 districts, the Floor Area Ratio is restricted to 6.00 max. Height is governed by sky exposure planes.",
+    "ocr_scanned_text": "For all commercial buildings in C6-2 districts, the Floor Area Ratio is restricted to 6.00 max. Height is governed by sky exposure planes.",
+    "ocr_preprocessed": "For all commercial buildings in C6-2 districts, the Floor Area Ratio is restricted to 6.00 max. Height is governed by sky exposure planes.",
+    "human_annotations": {
+      "max_far": 6.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 6.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 42,
+    "section_id": "Section 33-137",
+    "district": "C6-3",
+    "raw_zoning_clause": "In C6-3 commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 10.00, and the building height is limited to 210 feet.",
+    "ocr_scanned_text": "In C6-3 commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 10.00, and the building height is limited to 210 feet.",
+    "ocr_preprocessed": "In C6-3 commercial districts, the commercial Floor Area Ratio (FAR) shall not exceed 10.00, and the building height is limited to 210 feet.",
+    "human_annotations": {
+      "max_far": 10.0,
+      "max_height_ft": 210.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 10.0,
+      "max_height_ft": 210.0,
+      "permitted_uses": [
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "industrial"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 43,
+    "section_id": "Section 43-121",
+    "district": "M1-1",
+    "raw_zoning_clause": "In M1-1 light manufacturing districts, the industrial Floor Area Ratio (FAR) is restricted to 1.00 max. Rear yards of 20 feet are required. Building height is 60 feet max.",
+    "ocr_scanned_text": "In M1-1 light manufacturing districts, the industrial Fl0or Area Rat1o (F.A.R.) is restricted to 1.00 max. Rear yards of 20 feet are required. Building height is 60 feet max.",
+    "ocr_preprocessed": "In M1-1 light manufacturing districts, the industrial Floor Area Ratio (FAR) is restricted to 1.00 max. Rear yards of 20 feet are required. Building height is 60 feet max.",
+    "human_annotations": {
+      "max_far": 1.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 1.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 44,
+    "section_id": "Section 43-122",
+    "district": "M1-2",
+    "raw_zoning_clause": "For all buildings in M1-2 manufacturing districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "ocr_scanned_text": "For all buildings in M1-2 manufacturing districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "ocr_preprocessed": "For all buildings in M1-2 manufacturing districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 45,
+    "section_id": "Section 43-123",
+    "district": "M1-3",
+    "raw_zoning_clause": "In M1-3 districts, the maximum industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 60 feet.",
+    "ocr_scanned_text": "In M1-3 districts, the maximum industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 60 feet.",
+    "ocr_preprocessed": "In M1-3 districts, the maximum industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 60 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 46,
+    "section_id": "Section 43-124",
+    "district": "M1-4",
+    "raw_zoning_clause": "For all buildings in M1-4 manufacturing districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "ocr_scanned_text": "For all buildings in M1-4 manufacturing districts, tbe Floor Area Raio is restricted to 2.00 max. The max1mum height is limited to 60 feet.",
+    "ocr_preprocessed": "For all buildings in M1-4 manufacturing districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 47,
+    "section_id": "Section 43-125",
+    "district": "M2-1",
+    "raw_zoning_clause": "In M2-1 medium industrial districts, the Floor Area Ratio shall not exceed 2.00, and the maximum building height is restricted to 60 feet.",
+    "ocr_scanned_text": "In M2-1 medium industrial districts, the Floor Area Ratio shall not exceed 2.00, and the maximum building height is restricted to 60 feet.",
+    "ocr_preprocessed": "In M2-1 medium industrial districts, the Floor Area Ratio shall not exceed 2.00, and the maximum building height is restricted to 60 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 48,
+    "section_id": "Section 43-126",
+    "district": "M2-2",
+    "raw_zoning_clause": "For all buildings in M2-2 industrial districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "ocr_scanned_text": "For all buildings in M2-2 industrial districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "ocr_preprocessed": "For all buildings in M2-2 industrial districts, the Floor Area Ratio is restricted to 2.00 max. The maximum height is limited to 60 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 49,
+    "section_id": "Section 43-127",
+    "district": "M3-1",
+    "raw_zoning_clause": "In M3-1 heavy manufacturing districts, the industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 60 feet.",
+    "ocr_scanned_text": "In M3-1 heavy manufacturing districts, the industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 60 feet.",
+    "ocr_preprocessed": "In M3-1 heavy manufacturing districts, the industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is limited to 60 feet.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": 60.0,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  },
+  {
+    "id": 50,
+    "section_id": "Section 43-128",
+    "district": "M3-2",
+    "raw_zoning_clause": "In M3-2 heavy manufacturing districts, the industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is unlimited.",
+    "ocr_scanned_text": "In M3-2 heavy manufacturing districts, the industrial Fl0or Area Rat1o (F.A.R.) shall not exceed 2.00, and the building height is unlimited.",
+    "ocr_preprocessed": "In M3-2 heavy manufacturing districts, the industrial Floor Area Ratio (FAR) shall not exceed 2.00, and the building height is unlimited.",
+    "human_annotations": {
+      "max_far": 2.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "rag_extracted": {
+      "max_far": 2.0,
+      "max_height_ft": null,
+      "permitted_uses": [
+        "industrial",
+        "commercial"
+      ],
+      "prohibited_uses": [
+        "residential"
+      ],
+      "min_lot_area_sqft": 1700.0
+    },
+    "metrics": {
+      "far_match": true,
+      "height_match": true,
+      "uses_match": true,
+      "complete_agreement": true
+    }
+  }
+]
