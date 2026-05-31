@@ -46,6 +46,29 @@ python demo_small_scale.py
 - `results/small_scale_demo/results.json` - Performance metrics
 - `results/small_scale_demo/demo.log` - Execution log
 
+### Full-Scale Manhattan (42,075 parcels, ~2.5 hours first run)
+
+```bash
+python run_full_manhattan.py
+```
+
+**What it does (6-stage pipeline with checkpointing):**
+- Stage 1: Loads all 42,075 Manhattan parcels, computes 57-dim features
+- Stage 2: Builds heterogeneous graph (1,433,904 edges, 5 types) via STRtree
+- Stage 3: GNN pre-training (30 epochs, Huber loss → 3.92)
+- Stage 4: Physics-informed fine-tuning (20 epochs, loss → 0.229)
+- Stage 5: MARL optimisation (20 iterations × 5 steps = **52 seconds**)
+- Stage 6: Plan generation & GeoJSON export (1 second)
+
+**Checkpointing:** Each stage saves a `.done` file. Re-running skips completed stages.
+**After first run, stages 5–6 take only 64 seconds** (stages 1–4 load from cache).
+
+**Output** (in `results/full_manhattan/`):
+- `manhattan_landuse_plan_42k.csv` — Land-use plan for 42,075 parcels (14 MB)
+- `manhattan_landuse_plan_42k.geojson` — GeoJSON for GIS/dashboard (24 MB)
+- `cache/` — Model checkpoints (GNN, physics, MARL weights)
+- `stage_*.done` — Stage completion metadata (JSON)
+
 ### Medium-Scale Demo (1,000 parcels, ~15-30 minutes)
 
 ```bash
@@ -53,7 +76,7 @@ python demo_complete_pipeline.py
 ```
 
 **What it does:**
-- Same as small-scale but with 1,000 parcels
+- Same as full-scale but with 1,000 parcels
 - More epochs (50 pre-train, 20 physics, 100 MARL)
 - Better quality results
 
@@ -135,6 +158,22 @@ pip install pymoo
    ```
 
 ## Expected Results
+
+### Full-Scale (42,075 parcels)
+
+**Execution time:** ~2.5 hours (first run); 64 seconds (cached)
+**Hardware:** Apple M3 Pro, 18GB RAM, CPU-only
+**Final losses:**
+- GNN pre-training: 3.92 (Huber loss, 30 epochs)
+- Physics training: 0.229 (20 epochs)
+- MARL: 52 seconds, 20 iterations
+
+**Land-use distribution (0 zoning violations):**
+- Residential: 16,830 (40%)
+- Commercial: 12,622 (30%)
+- Mixed-Use: 6,311 (15%)
+- Public: 4,208 (10%)
+- Open Space: 2,104 (5%)
 
 ### Small-Scale (100 parcels)
 

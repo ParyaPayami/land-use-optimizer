@@ -22,7 +22,7 @@ setup(
     description="Physics Informed Multi-Agent Land Use Optimization Software",
     long_description=long_description,
     long_description_content_type="text/markdown",
-    url="https://github.com/pimaluos/pimaluos",
+    url="https://github.com/ParyaPayami/land-use-optimizer",
     packages=find_packages(exclude=["tests", "tests.*", "dashboard", "docs"]),
     classifiers=[
         "Development Status :: 3 - Alpha",

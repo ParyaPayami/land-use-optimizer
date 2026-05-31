@@ -105,7 +105,7 @@ class CityDataLoader(ABC):
     
     def compute_node_features(self, gdf: gpd.GeoDataFrame) -> pd.DataFrame:
         """
-        Compute 47-dimensional feature vector for each parcel.
+        Compute 57-dimensional feature vector for each parcel.
         
         This method implements the standard feature engineering pipeline
         that can be used across all cities.
@@ -294,7 +294,7 @@ class CityDataLoader(ABC):
         print("DATA LOADING COMPLETE")
         print("=" * 60)
         
-        return self.parcels_gdf, self.features
+        return self.parcels_gdf, self.features_normalized
     
     def load_and_compute_features(self) -> Tuple[gpd.GeoDataFrame, pd.DataFrame]:
         """

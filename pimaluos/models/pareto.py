@@ -156,15 +156,21 @@ class LandUseOptimizationProblem(Problem):
         max_far = self.constraint_masks['max_far'].values
         far_utilization = np.mean(far_values / (max_far + 1e-6))
         
+        # Robust column detection
+        lot_col = 'lot_area_sqft' if 'lot_area_sqft' in self.gdf.columns else ('lot_area' if 'lot_area' in self.gdf.columns else '')
+        lot_areas = self.gdf[lot_col].fillna(5000).values if lot_col else np.ones(self.num_parcels) * 5000
+        
+        far_col = 'built_far' if 'built_far' in self.gdf.columns else ('far' if 'far' in self.gdf.columns else '')
+        current_far = self.gdf[far_col].fillna(0.0).values if far_col else np.zeros(self.num_parcels)
+        
         # Development potential (additional buildable area)
-        lot_areas = self.gdf['lot_area_sqft'].fillna(5000).values
-        additional_area = np.sum((far_values - self.gdf.get('far', 0).fillna(0).values) * lot_areas)
+        additional_area = np.sum((far_values - current_far) * lot_areas)
         additional_area_normalized = additional_area / (np.sum(lot_areas) + 1e-6)
         
         # Tax revenue proxy (assessed value increase)
         if 'assessed_total' in self.gdf.columns:
             current_value = self.gdf['assessed_total'].fillna(0).values
-            value_increase = np.sum(far_values * current_value / (self.gdf.get('far', 1).fillna(1).values + 1e-6))
+            value_increase = np.sum(far_values * current_value / (current_far + 1e-6))
             value_increase_normalized = value_increase / (np.sum(current_value) + 1e-6)
         else:
             value_increase_normalized = far_utilization
@@ -188,7 +194,9 @@ class LandUseOptimizationProblem(Problem):
         Returns:
             Environmental objective value (higher is better)
         """
-        lot_areas = self.gdf['lot_area_sqft'].fillna(5000).values
+        # Robust column detection
+        lot_col = 'lot_area_sqft' if 'lot_area_sqft' in self.gdf.columns else ('lot_area' if 'lot_area' in self.gdf.columns else '')
+        lot_areas = self.gdf[lot_col].fillna(5000).values if lot_col else np.ones(self.num_parcels) * 5000
         
         # Green space preservation (lower FAR = more green space)
         green_space_score = 1.0 - np.mean(far_values / (self.constraint_masks['max_far'].values + 1e-6))
@@ -262,13 +270,15 @@ class LandUseOptimizationProblem(Problem):
         # Equitable distribution (low Gini coefficient)
         sorted_far = np.sort(far_values)
         n = len(sorted_far)
-        cumsum = np.cumsum(sorted_far)
         gini = (2 * np.sum((np.arange(1, n + 1)) * sorted_far)) / (n * np.sum(sorted_far) + 1e-6) - (n + 1) / n
         equity_distribution = 1.0 - gini
         
+        # Robust column detection
+        far_col = 'built_far' if 'built_far' in self.gdf.columns else ('far' if 'far' in self.gdf.columns else '')
+        
         # Displacement risk (avoid large FAR increases in low-value areas)
-        if 'assessed_total' in self.gdf.columns and 'far' in self.gdf.columns:
-            current_far = self.gdf['far'].fillna(0).values
+        if 'assessed_total' in self.gdf.columns and far_col:
+            current_far = self.gdf[far_col].fillna(0).values
             far_increase = far_values - current_far
             low_value_mask = self.gdf['assessed_total'] < self.gdf['assessed_total'].median()
             displacement_risk = np.mean(far_increase[low_value_mask]) if np.any(low_value_mask) else 0
@@ -301,15 +311,19 @@ class LandUseOptimizationProblem(Problem):
         """
         violations = np.zeros(3)
         
+        # Robust column detection
+        lot_col = 'lot_area_sqft' if 'lot_area_sqft' in self.gdf.columns else ('lot_area' if 'lot_area' in self.gdf.columns else '')
+        
         try:
             # Create land use scenario
             scenario = {}
             for i, far in enumerate(far_values):
+                lot_area = self.gdf.iloc[i].get(lot_col, 5000) if lot_col else 5000
                 scenario[i] = {
                     'use': 'mixed',
                     'units': int(far * 10),
-                    'floor_area': far * self.gdf.iloc[i].get('lot_area_sqft', 5000),
-                    'lot_area_sqft': self.gdf.iloc[i].get('lot_area_sqft', 5000),
+                    'floor_area': far * lot_area,
+                    'lot_area_sqft': lot_area,
                     'height_ft': min(far * 12, self.constraint_masks.iloc[i]['max_height_ft'])
                 }
             
@@ -427,19 +441,35 @@ class ParetoOptimizer:
         )
         
         logger.info(f"Optimization complete!")
-        logger.info(f"  Pareto solutions found: {len(result.F)}")
         
         # Convert to ParetoSolution objects
         solutions = []
-        for i in range(len(result.F)):
-            solution = ParetoSolution(
-                land_use_config=result.X[i],
-                objectives=-result.F[i],  # Negate back (we minimized negatives)
-                constraints_satisfied=np.all(result.G[i] <= 0) if result.G is not None else True,
-                rank=0,  # All returned solutions are non-dominated
-                crowding_distance=0.0  # Would need to compute from result
-            )
-            solutions.append(solution)
+        if result.F is not None:
+            logger.info(f"  Pareto solutions found: {len(result.F)}")
+            for i in range(len(result.F)):
+                solution = ParetoSolution(
+                    land_use_config=result.X[i],
+                    objectives=-result.F[i],  # Negate back (we minimized negatives)
+                    constraints_satisfied=np.all(result.G[i] <= 0) if result.G is not None else True,
+                    rank=0,  # All returned solutions are non-dominated
+                    crowding_distance=0.0  # Would need to compute from result
+                )
+                solutions.append(solution)
+        else:
+            logger.info("  No completely feasible solutions found. Returning best population solutions.")
+            if result.pop is not None:
+                for ind in result.pop:
+                    solution = ParetoSolution(
+                        land_use_config=ind.X,
+                        objectives=-ind.F if ind.F is not None else np.zeros(4),
+                        constraints_satisfied=np.all(ind.G <= 0) if ind.G is not None else False,
+                        rank=0,
+                        crowding_distance=0.0
+                    )
+                    solutions.append(solution)
+            else:
+                # Fallback empty list
+                pass
         
         return solutions
     

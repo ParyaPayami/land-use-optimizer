@@ -27,13 +27,13 @@
 | ⚡ **Physics Engine** | Traffic, hydrology, solar simulation |
 | 🤖 **LLM-RAG** | Automated zoning constraint extraction |
 | 🗺️ **Interactive Dashboard** | deck.gl + CesiumJS visualization |
-| 🏛️ **Multi-City** | Manhattan, Chicago, LA, Boston support |
+| 🏛️ **Multi-City** | Manhattan support (expandable architecture) |
 
 ---
 
 ## 🚀 Quick Start
 
-### Installation
+### Installation & Demo
 
 ```bash
 # Clone
@@ -46,6 +46,23 @@ source venv/bin/activate  # Windows: venv\Scripts\activate
 
 # Install
 pip install -e ".[dev]"
+
+# Run a quick 100-parcel demo
+python demo.py
+```
+
+### Start the Dashboard
+
+```bash
+# Terminal 1: Backend
+uvicorn pimaluos.api.server:app --reload
+
+# Terminal 2: Frontend
+cd dashboard
+npm install
+npm run dev
+
+# Open http://localhost:3000
 ```
 
 ---
@@ -55,28 +72,39 @@ pip install -e ".[dev]"
 ### Minimum (Demo - 1,000 parcels)
 - **CPU:** 4+ cores (Intel i5/AMD Ryzen 5 or better)
 - **RAM:** 8GB minimum, 16GB recommended
-- **GPU:** NVIDIA GPU with 4GB+ VRAM (e.g., GTX 1650, RTX 3050)
+- **GPU:** Not required (CPU-only)
 - **Storage:** 5GB free space
 - **Time:** ~15 minutes for full pipeline
 
-### Recommended (Full Manhattan - 42,000 parcels)
-- **CPU:** 16+ cores (AMD EPYC, Intel Xeon, or high-end consumer)
-- **RAM:** 64GB minimum, 128GB recommended for full graph construction
-- **GPU:** NVIDIA A100 (40GB), A6000 (48GB), or RTX 4090 (24GB)
-- **Storage:** 20GB free space
-- **Time:** ~5 hours for complete optimization
+### Full Manhattan (42,075 parcels) ✅ Runs on Consumer Laptop
+- **CPU:** Apple M3 Pro, Intel i7, or AMD Ryzen 7 (8+ cores)
+- **RAM:** 16GB minimum (tested on 18GB unified memory)
+- **GPU:** Not required — entire pipeline runs on CPU
+- **Storage:** 5GB free space (results: ~80MB)
+- **Time:** ~2.5 hours end-to-end (64 seconds for optimisation with cached training)
 
-### Memory-Efficient Mode
-For researchers with limited hardware, use batched processing:
-```python
-from pimaluos.core import ParcelGraphBuilder
+### Running the Full-Scale Pipeline
+```bash
+# Activate environment
+source .venv/bin/activate
 
-# Build graph in batches to reduce memory usage
-builder = ParcelGraphBuilder(gdf, features, batch_size=500)
-graph = builder.build_heterogeneous_graph(memory_efficient=True)
+# Run full 42K-parcel Manhattan pipeline
+python run_full_manhattan.py
 ```
 
-**Note:** The 1,000-parcel demo is fully reproducible on consumer hardware. The full Manhattan case study requires high-end workstation/server hardware, but the methodology is scalable to any dataset size.
+**Output** (in `results/full_manhattan/`):
+| File | Description | Size |
+|------|-------------|------|
+| `manhattan_landuse_plan_42k.csv` | Full plan for 42,075 parcels | 14 MB |
+| `manhattan_landuse_plan_42k.geojson` | GeoJSON for GIS/dashboard | 24 MB |
+| `cache/gnn_pretrained.pt` | GNN model weights | — |
+| `cache/gnn_physics.pt` | Physics-trained GNN weights | — |
+| `cache/marl_trainer.pt` | MARL agent weights | — |
+| `cache/manhattan_hetero_graph.pt` | Cached heterogeneous graph | — |
+
+The pipeline uses file-based checkpointing (`stage_*.done`). If interrupted, re-running the script resumes from the last completed stage.
+
+**Note:** No GPU, CUDA, or cloud compute is needed. The full 42,075-parcel Manhattan case study is fully reproducible on a consumer laptop.
 
 ---
 
@@ -99,6 +127,8 @@ pip install pimaluos[ollama]
 
 # Download and run a model
 ollama pull llama2
+```
+
 ```python
 from pimaluos.knowledge import get_llm
 llm = get_llm('ollama', model='llama2')
@@ -114,42 +144,6 @@ Set API keys in `.env`:
 ```bash
 OPENAI_API_KEY=sk-...
 ANTHROPIC_API_KEY=sk-ant-...
-```
-
----
-
-## 🚀 Quick Start
-
-### Installation
-
-```bash
-# Clone
-git clone https://github.com/paryapayami/PIMALUOS.git
-cd PIMALUOS
-
-# Create environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\\Scripts\\activate
-
-# Install
-pip install -e ".[dev]"
-
-```bash
-python demo.py
-```
-
-### Start the Dashboard
-
-```bash
-# Terminal 1: Backend
-uvicorn pimaluos.api.server:app --reload
-
-# Terminal 2: Frontend
-cd dashboard
-npm install
-npm run dev
-
-# Open http://localhost:3000
 ```
 
 ---
@@ -171,7 +165,7 @@ builder = ParcelGraphBuilder(gdf, features)
 graph = builder.build_heterogeneous_graph()
 
 # 3. Train GNN
-model = ParcelGNN(in_channels=47, hidden_channels=128)
+model = ParcelGNN(in_channels=57, hidden_channels=128)  # 57-dim features
 embeddings = model.get_embeddings(graph)
 
 # 4. Extract zoning constraints
@@ -267,7 +261,7 @@ NEXT_PUBLIC_CESIUM_TOKEN=ey...
   title={PIMALUOS: Physics Informed Multi-Agent Land Use Optimization},
   author={...},
   journal={Computers, Environment and Urban Systems},
-  year={2024}
+  year={2026}
 }
 ```
 

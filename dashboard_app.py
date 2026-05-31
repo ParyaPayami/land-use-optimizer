@@ -125,9 +125,11 @@ with col_map:
                 'Industrial': '#8E44AD', 'Mixed-Use': '#D35400', 
                 'Public': '#3498DB', 'Open Space': '#2ECC71'
             },
-            size_max=8, zoom=10.5, height=600,
-            title=title
+            size_max=5, zoom=11, height=600,
+            title=title,
+            opacity=0.7
         )
+        fig_map.update_traces(marker={'size': 3})
         fig_map.update_layout(mapbox_style="carto-darkmatter", margin={"r":0,"t":40,"l":0,"b":0})
         st.plotly_chart(fig_map, use_container_width=True)
 

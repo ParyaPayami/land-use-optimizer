@@ -21,7 +21,9 @@ import torch
 from torch_geometric.data import HeteroData
 from scipy.spatial import cKDTree
 from shapely.geometry import LineString, Point
+from shapely.strtree import STRtree
 from tqdm import tqdm
+import gc
 
 from pimaluos.config.settings import get_city_config, CityConfig
 
@@ -70,6 +72,8 @@ class ParcelGraphBuilder:
         config: Optional[CityConfig] = None,
         k_neighbors: int = 10,
         edge_types: Optional[List[str]] = None,
+        memory_efficient: bool = False,
+        adjacency_buffer_ft: float = 15.0,
     ):
         """
         Initialize graph builder.
@@ -80,11 +84,15 @@ class ParcelGraphBuilder:
             config: Optional city configuration
             k_neighbors: Number of neighbors for k-NN based edge types
             edge_types: Optional list of edge types to build
+            memory_efficient: If True, process edges in batches to reduce peak RAM
+            adjacency_buffer_ft: Buffer distance (feet) for adjacency detection
         """
         self.gdf = gdf.reset_index(drop=True)
         self.features = features.reset_index(drop=True)
         self.config = config
         self.k_neighbors = k_neighbors
+        self.memory_efficient = memory_efficient
+        self.adjacency_buffer_ft = adjacency_buffer_ft
         self.edge_types = edge_types or (
             config.edge_types if config else self.DEFAULT_EDGE_TYPES
         )
@@ -98,46 +106,84 @@ class ParcelGraphBuilder:
         # Build KD-tree for efficient neighbor queries
         self.kdtree = cKDTree(self.centroids)
         
+        # Build STRtree for fast spatial adjacency queries (O(N log N))
+        self._strtree = None  # Lazily built
+        
         # Store edge data
         self.edges: Dict[str, Tuple[torch.Tensor, torch.Tensor]] = {}
     
-    def build_spatial_adjacency_edges(self) -> Tuple[torch.Tensor, torch.Tensor]:
+    def _get_strtree(self) -> STRtree:
+        """Lazily build and cache the Shapely STRtree for O(N log N) spatial queries."""
+        if self._strtree is None:
+            print("  Building STRtree spatial index...")
+            self._strtree = STRtree(self.gdf.geometry.values)
+        return self._strtree
+
+    def build_spatial_adjacency_edges(
+        self, batch_size: int = 2000
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Build edges between parcels that share a boundary.
-        
+
+        Uses a Shapely STRtree for O(N log N) candidate retrieval instead of
+        the naive O(N²) scan, making this viable for 40K+ parcels.
         Edge weight is proportional to shared boundary length.
-        
+
+        Args:
+            batch_size: Process parcels in batches to cap peak memory.
+
         Returns:
             Tuple of (edge_index, edge_weight) tensors
         """
-        print("Building spatial adjacency edges...")
-        
-        edge_index = []
-        edge_weight = []
-        
-        for idx in tqdm(range(len(self.gdf)), desc="Adjacency"):
-            parcel = self.gdf.geometry.iloc[idx]
-            
-            # Find neighbors within buffer (increased to 15ft to jump roads/gaps)
-            buffered = parcel.buffer(15)
-            mask = self.gdf.geometry.intersects(buffered)
-            neighbors_idx = np.where(mask)[0]
-            
-            for neighbor_idx in neighbors_idx:
-                if neighbor_idx != idx:
-                    neighbor = self.gdf.geometry.iloc[neighbor_idx]
-                    intersection = parcel.intersection(neighbor)
-                    
-                    if hasattr(intersection, 'length') and intersection.length > 0:
-                        # Normalize by total boundary
-                        weight = intersection.length / (parcel.length + 1e-10)
-                        edge_index.append([idx, neighbor_idx])
-                        edge_weight.append(weight)
-        
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
-        edge_weight = torch.tensor(edge_weight, dtype=torch.float)
-        
-        print(f"Created {edge_index.shape[1] if len(edge_index) > 0 else 0} adjacency edges")
+        print("Building spatial adjacency edges (STRtree-accelerated)...")
+        buf = self.adjacency_buffer_ft
+        strtree = self._get_strtree()
+        geoms = self.gdf.geometry.values
+        n = len(geoms)
+
+        edge_src, edge_dst, edge_wt = [], [], []
+
+        for batch_start in tqdm(
+            range(0, n, batch_size), desc="Adjacency batches"
+        ):
+            batch_end = min(batch_start + batch_size, n)
+            for idx in range(batch_start, batch_end):
+                parcel = geoms[idx]
+                buffered = parcel.buffer(buf)
+
+                # STRtree returns candidate indices in O(log N)
+                candidates = strtree.query(buffered)
+
+                for neighbor_idx in candidates:
+                    if neighbor_idx == idx:
+                        continue
+                    neighbor = geoms[neighbor_idx]
+                    try:
+                        intersection = parcel.intersection(neighbor)
+                        shared_len = getattr(intersection, "length", 0.0)
+                    except Exception:
+                        shared_len = 0.0
+
+                    if shared_len > 0:
+                        weight = shared_len / (parcel.length + 1e-10)
+                        edge_src.append(idx)
+                        edge_dst.append(neighbor_idx)
+                        edge_wt.append(weight)
+
+            # Free memory between batches in memory-efficient mode
+            if self.memory_efficient:
+                gc.collect()
+
+        if len(edge_src) == 0:
+            empty = torch.zeros((2, 0), dtype=torch.long)
+            return empty, torch.zeros(0, dtype=torch.float)
+
+        edge_index = torch.tensor(
+            [edge_src, edge_dst], dtype=torch.long
+        ).contiguous()
+        edge_weight = torch.tensor(edge_wt, dtype=torch.float)
+
+        print(f"  Created {edge_index.shape[1]} adjacency edges")
         return edge_index, edge_weight
     
     def build_visual_connectivity_edges(

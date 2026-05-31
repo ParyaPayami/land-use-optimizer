@@ -37,10 +37,10 @@ classifiers = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/pimaluos/pimaluos"
-Documentation = "https://pimaluos.readthedocs.io/"
-Repository = "https://github.com/pimaluos/pimaluos"
-Issues = "https://github.com/pimaluos/pimaluos/issues"
+Homepage = "https://github.com/ParyaPayami/land-use-optimizer"
+Documentation = "https://paryapayami.github.io/land-use-optimizer/"
+Repository = "https://github.com/ParyaPayami/land-use-optimizer"
+Issues = "https://github.com/ParyaPayami/land-use-optimizer/issues"
 
 [project.scripts]
 pimaluos = "pimaluos.cli:main"

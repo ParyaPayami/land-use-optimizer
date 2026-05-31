@@ -298,85 +298,117 @@ class UrbanOptSystem:
     
     def pretrain_gnn(
         self,
-        num_epochs: int = 50,
-        learning_rate: float = 1e-3,
-        batch_size: int = 32
+        num_epochs: int = 30,
+        learning_rate: float = 1e-4,
+        batch_size: int = 32,
+        grad_clip: float = 1.0,
+        feature_clamp: float = 10.0,
     ) -> Dict[str, List[float]]:
         """
         Pre-train GNN on self-supervised tasks.
-        
+
         Uses multi-task learning:
         - Feature reconstruction
         - Land-use classification (if labels available)
         - Development potential prediction
-        
+
         Args:
             num_epochs: Number of training epochs
-            learning_rate: Learning rate
+            learning_rate: Learning rate (1e-4 is stable for large hetero graphs)
             batch_size: Batch size (not used for full-graph training)
-            
+            grad_clip: Max norm for gradient clipping (prevents explosion)
+            feature_clamp: Clamp node features to [-feature_clamp, feature_clamp]
+                           to neutralise any z-score outliers before forward pass.
+
         Returns:
             Training history dict
         """
         if self.gnn_model is None:
             self.initialize_gnn()
-        
+
         logger.info(f"Pre-training GNN for {num_epochs} epochs...")
+        logger.info(f"  lr={learning_rate}, grad_clip={grad_clip}, feature_clamp={feature_clamp}")
         start_time = time.time()
-        
+
         # Move graph to device
         graph = self.graph.to(self.device)
-        
-        # Optimizer
-        optimizer = optim.Adam(self.gnn_model.parameters(), lr=learning_rate)
-        
+
+        # ── Sanitise node features ────────────────────────────────────────────
+        # Replace any NaN/Inf that survived normalisation, then clamp outliers.
+        x = graph['parcel'].x
+        x = torch.nan_to_num(x, nan=0.0, posinf=feature_clamp, neginf=-feature_clamp)
+        x = torch.clamp(x, -feature_clamp, feature_clamp)
+        graph['parcel'].x = x
+        logger.info(
+            f"  Node features sanitised: "
+            f"min={x.min().item():.3f}  max={x.max().item():.3f}  "
+            f"mean={x.mean().item():.3f}"
+        )
+
+        # Optimizer with weight decay for regularisation
+        optimizer = optim.Adam(
+            self.gnn_model.parameters(), lr=learning_rate, weight_decay=1e-5
+        )
+        # Cosine annealing keeps LR from getting stuck
+        scheduler = optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, T_max=num_epochs, eta_min=learning_rate * 0.1
+        )
+
         # Training loop
         self.gnn_model.train()
         for epoch in range(num_epochs):
             optimizer.zero_grad()
-            
-            # Multi-task loss
-            total_loss = 0.0
-            
-            # Task 1: Feature reconstruction
+
+            total_loss = torch.tensor(0.0, device=self.device)
+
+            # Task 1: Feature reconstruction (Huber loss is less sensitive to outliers)
             reconstructed = self.gnn_model(graph, task='reconstruct')
-            recon_loss = nn.MSELoss()(reconstructed, graph['parcel'].x)
-            total_loss += recon_loss
-            
+            recon_loss = nn.HuberLoss(delta=1.0)(reconstructed, graph['parcel'].x)
+            total_loss = total_loss + recon_loss
+
             # Task 2: Land-use classification (if labels available)
             if 'land_use_label' in graph['parcel']:
                 logits = self.gnn_model(graph, task='landuse')
                 landuse_loss = nn.CrossEntropyLoss()(
-                    logits, 
+                    logits,
                     graph['parcel'].land_use_label
                 )
-                total_loss += 0.5 * landuse_loss
-            
-            # Task 3: Development potential
+                total_loss = total_loss + 0.5 * landuse_loss
+
+            # Task 3: Development potential (predict normalised FAR)
             dev_pred = self.gnn_model(graph, task='development')
-            # Self-supervised: predict FAR from features
             if 'far' in self.gdf.columns:
+                far_raw = self.gdf['far'].fillna(0).values.astype(float)
+                # Normalise FAR to [0, 1] range to match model output scale
+                far_max = max(far_raw.max(), 1e-6)
                 far_target = torch.tensor(
-                    self.gdf['far'].fillna(0).values,
+                    far_raw / far_max,
                     dtype=torch.float32,
                     device=self.device
                 )
-                dev_loss = nn.MSELoss()(dev_pred.squeeze(), far_target)
-                total_loss += 0.3 * dev_loss
-            
-            # Backward pass
+                dev_loss = nn.HuberLoss(delta=1.0)(dev_pred.squeeze(), far_target)
+                total_loss = total_loss + 0.3 * dev_loss
+
+            # Backward pass with gradient clipping
             total_loss.backward()
+            nn.utils.clip_grad_norm_(self.gnn_model.parameters(), max_norm=grad_clip)
             optimizer.step()
-            
-            # Log progress
-            self.training_history['pretrain_losses'].append(total_loss.item())
-            
-            if (epoch + 1) % 10 == 0:
-                logger.info(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss.item():.4f}")
-        
+            scheduler.step()
+
+            loss_val = total_loss.item()
+            self.training_history['pretrain_losses'].append(loss_val)
+
+            if (epoch + 1) % 5 == 0:
+                logger.info(
+                    f"Epoch {epoch+1:3d}/{num_epochs}  "
+                    f"loss={loss_val:.4f}  "
+                    f"recon={recon_loss.item():.4f}  "
+                    f"lr={scheduler.get_last_lr()[0]:.2e}"
+                )
+
         elapsed = time.time() - start_time
         logger.info(f"Pre-training completed in {elapsed:.1f}s")
-        
+
         return {'pretrain_losses': self.training_history['pretrain_losses']}
     
     def initialize_physics_engine(self) -> MultiPhysicsEngine:
@@ -499,7 +531,8 @@ class UrbanOptSystem:
         self,
         num_iterations: int = 100,
         steps_per_iteration: int = 50,
-        agent_types: Optional[List[str]] = None
+        agent_types: Optional[List[str]] = None,
+        use_gnn: bool = True
     ) -> MARLTrainer:
         """
         Optimize land-use configuration using multi-agent RL.
@@ -508,11 +541,12 @@ class UrbanOptSystem:
             num_iterations: Number of training iterations
             steps_per_iteration: Steps per iteration
             agent_types: List of stakeholder types (None = all 5)
+            use_gnn: Whether to use GNN embeddings (True) or raw features (False)
             
         Returns:
             Trained MARLTrainer instance
         """
-        if self.gnn_model is None:
+        if self.gnn_model is None and use_gnn:
             raise ValueError("Must train GNN first")
         
         if self.physics_engine is None:
@@ -534,6 +568,7 @@ class UrbanOptSystem:
         logger.info(f"Optimizing with MARL ({len(agent_types)} agents)...")
         logger.info(f"  Iterations: {num_iterations}")
         logger.info(f"  Steps per iteration: {steps_per_iteration}")
+        logger.info(f"  Use GNN: {use_gnn}")
         start_time = time.time()
         
         # Create MARL environment
@@ -542,18 +577,22 @@ class UrbanOptSystem:
             graph_data=self.graph.to(self.device),
             physics_engine=self.physics_engine,
             constraint_masks=self.constraint_masks,
-            num_parcels=len(self.gdf)
+            num_parcels=len(self.gdf),
+            use_gnn=use_gnn
         )
         
         # Get embedding dimension
-        with torch.no_grad():
-            embeddings = self.gnn_model.get_embeddings(self.graph.to(self.device))
-            # get_embeddings returns a dict, extract 'parcel' node embeddings
-            if isinstance(embeddings, dict):
-                parcel_embeddings = embeddings['parcel']
-            else:
-                parcel_embeddings = embeddings
-            state_dim = parcel_embeddings.shape[1]
+        if use_gnn:
+            with torch.no_grad():
+                embeddings = self.gnn_model.get_embeddings(self.graph.to(self.device))
+                # get_embeddings returns a dict, extract 'parcel' node embeddings
+                if isinstance(embeddings, dict):
+                    parcel_embeddings = embeddings['parcel']
+                else:
+                    parcel_embeddings = embeddings
+                state_dim = parcel_embeddings.shape[1]
+        else:
+            state_dim = self.graph['parcel'].x.shape[1]
         
         # Create trainer
         trainer = MARLTrainer(
@@ -595,17 +634,11 @@ class UrbanOptSystem:
         # Reset environment and get initial state
         state = self.marl_env.reset()
         
-        # Get actions from all agents (deterministic)
+        # Get actions from all agents (deterministic, batched)
         actions = {}
         for agent_type, agent in trainer.agents.items():
-            agent_actions = []
-            for i in range(len(self.gdf)):
-                action, _ = agent.select_action(state[i], deterministic=True)
-                # Handle both tensor and int actions
-                if hasattr(action, 'item'):
-                    agent_actions.append(action.item())
-                else:
-                    agent_actions.append(int(action))
+            acts, _, _ = agent.select_action_batch(state, deterministic=True)
+            agent_actions = acts.tolist()
             actions[agent_type] = agent_actions
             # DEBUG: Print action distribution
             from collections import Counter
@@ -617,37 +650,8 @@ class UrbanOptSystem:
         voting = ConsensusVotingMechanism(voting_strategy='weighted')
         consensus_actions = voting.aggregate_votes(actions)
         
-        # HEURISTIC FALLBACK: If agents converged to monoculture (e.g. all Commercial),
-        # inject diversity to ensure the demo is meaningful.
-        unique_actions = set(consensus_actions)
-        if len(unique_actions) < 3:
-            logger.warning("Agents converged to monoculture. Applying heuristic diversity injection.")
-            import numpy as np
-            
-            # Convert to numpy for manipulation
-            final_actions = np.array(consensus_actions)
-            n_parcels = len(final_actions)
-            
-            # Target: 40% Res (0), 30% Com (1), 15% Mix (3), 10% Public (4), 5% Open (5)
-            # We preserve existing structure where possible but force distribution
-            
-            # Generate mask indices
-            indices = np.arange(n_parcels)
-            np.random.shuffle(indices)
-            
-            res_idx = indices[:int(0.40 * n_parcels)]
-            com_idx = indices[int(0.40 * n_parcels):int(0.70 * n_parcels)]
-            mix_idx = indices[int(0.70 * n_parcels):int(0.85 * n_parcels)]
-            pub_idx = indices[int(0.85 * n_parcels):int(0.95 * n_parcels)]
-            opn_idx = indices[int(0.95 * n_parcels):]
-            
-            final_actions[res_idx] = 0
-            final_actions[com_idx] = 1
-            final_actions[mix_idx] = 3
-            final_actions[pub_idx] = 4
-            final_actions[opn_idx] = 5
-            
-            consensus_actions = final_actions.tolist()
+        # Removed heuristic fallback: We want the true MARL actions for the baseline evaluation,
+        # even if they converge to a monoculture (which is a known limitation of global reward).
 
         # Create final plan DataFrame
         plan = pd.DataFrame({
@@ -730,7 +734,7 @@ class UrbanOptSystem:
     
     def load_checkpoint(self, path: Path):
         """Load system checkpoint."""
-        checkpoint = torch.load(path, map_location=self.device)
+        checkpoint = torch.load(path, map_location=self.device, weights_only=False)
         
         if checkpoint['gnn_state_dict'] and self.gnn_model:
             self.gnn_model.load_state_dict(checkpoint['gnn_state_dict'])
