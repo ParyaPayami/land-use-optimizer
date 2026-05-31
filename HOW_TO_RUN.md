@@ -46,6 +46,24 @@ python demo_small_scale.py
 - `results/small_scale_demo/results.json` - Performance metrics
 - `results/small_scale_demo/demo.log` - Execution log
 
+### Single-Command Reproducibility (Reviewer / Open Science mode)
+
+To completely reproduce the results, baselines, MARL validation, and figures from the manuscript using a 500-parcel sample (runs in ~10 minutes):
+
+```bash
+source .venv/bin/activate
+./reproduce_all.sh
+```
+
+**What it does:**
+- Pre-trains the GNN and runs the actual Physics feedback.
+- Runs Baseline Comparisons (including the fixed No GNN spatial baseline).
+- Performs MARL Validation (Reward convergence, conflict resolution, single-agent ablation).
+- Generates all Core Figures and the High-Resolution Vector Difference Maps.
+
+**Output:**
+All logs, JSON metrics, and print-ready figures are placed in `results/`.
+
 ### Full-Scale Manhattan (42,075 parcels, ~2.5 hours first run)
 
 ```bash

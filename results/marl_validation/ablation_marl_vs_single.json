@@ -1,0 +1,26 @@
+{
+  "single_agent_planner": {
+    "economic_value": 886388.0,
+    "diversity_entropy": 0.8236194886857942,
+    "constraint_violations": 0,
+    "environmental_impact": 1.772776,
+    "social_equity_gini": 0.11256725497186348,
+    "action_distribution": {
+      "decrease": 23,
+      "maintain": 185,
+      "increase": 292
+    }
+  },
+  "cooperative_marl": {
+    "economic_value": 883188.0,
+    "diversity_entropy": 1.0866598017472922,
+    "constraint_violations": 0,
+    "environmental_impact": 1.7663759999999997,
+    "social_equity_gini": 0.11561437881855285,
+    "action_distribution": {
+      "decrease": 132,
+      "maintain": 176,
+      "increase": 192
+    }
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "random": {
+    "mean": {
+      "economic_value": 916596.0,
+      "diversity_entropy": 0.7803746783783041,
+      "constraint_violations": 0.0,
+      "environmental_impact": 1.833192,
+      "social_equity_gini": 0.08147978826004043,
+      "execution_time": 5.507469177246094e-05
+    },
+    "std": {
+      "economic_value": 0.0,
+      "diversity_entropy": 0.0,
+      "constraint_violations": 0.0,
+      "environmental_impact": 0.0,
+      "social_equity_gini": 0.0,
+      "execution_time": 0.0
+    },
+    "action_distribution": {
+      "decrease": 161,
+      "maintain": 319,
+      "increase": 20
+    },
+    "all_runs": [
+      {
+        "economic_value": 916596.0,
+        "diversity_entropy": 0.7803746783783041,
+        "constraint_violations": 0,
+        "environmental_impact": 1.833192,
+        "social_equity_gini": 0.08147978826004043,
+        "action_distribution": {
+          "decrease": 161,
+          "maintain": 319,
+          "increase": 20
+        },
+        "execution_time": 5.507469177246094e-05
+      }
+    ]
+  },
+  "rule_based": {
+    "mean": {
+      "economic_value": 913746.0,
+      "diversity_entropy": 0.47560606046913034,
+      "constraint_violations": 0,
+      "environmental_impact": 1.8274920000000001,
+      "social_equity_gini": 0.08211454386667638,
+      "action_distribution": {
+        "decrease": 433,
+        "maintain": 20,
+        "increase": 47
+      },
+      "execution_time": 0.0006039142608642578
+    },
+    "action_details": {
+      "decrease_count": 433,
+      "maintain_count": 20,
+      "increase_count": 47,
+      "constraint_violations": 0,
+      "avg_utilization": 2.192888903555548,
+      "underdeveloped_count": 47,
+      "overdeveloped_count": 433
+    }
+  },
+  "greedy": {
+    "mean": {
+      "economic_value": 923230.0,
+      "diversity_entropy": 0.5063426145500599,
+      "constraint_violations": 0,
+      "environmental_impact": 1.84646,
+      "social_equity_gini": 0.07585339731161245,
+      "action_distribution": {
+        "decrease": 26,
+        "maintain": 428,
+        "increase": 46
+      },
+      "execution_time": 0.0003590583801269531
+    },
+    "action_details": {
+      "decrease_count": 26,
+      "maintain_count": 428,
+      "increase_count": 46,
+      "constraint_violations": 0,
+      "economic_value_initial": 2192890.0,
+      "economic_value_final": 923230.0,
+      "economic_improvement": -0.5789893701915834
+    }
+  },
+  "pimaluos": {
+    "mean": {
+      "economic_value": 897792.0,
+      "diversity_entropy": 0.0,
+      "constraint_violations": 0.0,
+      "environmental_impact": 1.795584,
+      "social_equity_gini": 0.09778564299971482,
+      "execution_time": 11.013760089874268
+    },
+    "std": {
+      "economic_value": 0.0,
+      "diversity_entropy": 0.0,
+      "constraint_violations": 0.0,
+      "environmental_impact": 0.0,
+      "social_equity_gini": 0.0,
+      "execution_time": 0.0
+    },
+    "action_distribution": {
+      "0": 500
+    },
+    "all_runs": [
+      {
+        "economic_value": 897792.0,
+        "diversity_entropy": -0.0,
+        "constraint_violations": 0,
+        "environmental_impact": 1.795584,
+        "social_equity_gini": 0.09778564299971482,
+        "action_distribution": {
+          "decrease": 500,
+          "maintain": 0,
+          "increase": 0
+        },
+        "execution_time": 11.013760089874268
+      }
+    ]
+  },
+  "pimaluos_no_physics": {
+    "mean": {
+      "economic_value": 897792.0,
+      "diversity_entropy": 0.0,
+      "constraint_violations": 0.0,
+      "environmental_impact": 1.795584,
+      "social_equity_gini": 0.09778564299971482,
+      "execution_time": 10.637330055236816
+    },
+    "std": {
+      "economic_value": 0.0,
+      "diversity_entropy": 0.0,
+      "constraint_violations": 0.0,
+      "environmental_impact": 0.0,
+      "social_equity_gini": 0.0,
+      "execution_time": 0.0
+    },
+    "action_distribution": {
+      "0": 500
+    },
+    "all_runs": [
+      {
+        "economic_value": 897792.0,
+        "diversity_entropy": -0.0,
+        "constraint_violations": 0,
+        "environmental_impact": 1.795584,
+        "social_equity_gini": 0.09778564299971482,
+        "action_distribution": {
+          "decrease": 500,
+          "maintain": 0,
+          "increase": 0
+        },
+        "execution_time": 10.637330055236816
+      }
+    ]
+  },
+  "pimaluos_no_gnn": {
+    "mean": {
+      "economic_value": 915842.0,
+      "diversity_entropy": 0.8203183799385051,
+      "constraint_violations": 0.0,
+      "environmental_impact": 1.8316839999999999,
+      "social_equity_gini": 0.08216774072383659,
+      "execution_time": 8.810358047485352
+    },
+    "std": {
+      "economic_value": 0.0,
+      "diversity_entropy": 0.0,
+      "constraint_violations": 0.0,
+      "environmental_impact": 0.0,
+      "social_equity_gini": 0.0,
+      "execution_time": 0.0
+    },
+    "action_distribution": {
+      "1": 319,
+      "2": 31,
+      "0": 150
+    },
+    "all_runs": [
+      {
+        "economic_value": 915842.0,
+        "diversity_entropy": 0.8203183799385051,
+        "constraint_violations": 0,
+        "environmental_impact": 1.8316839999999999,
+        "social_equity_gini": 0.08216774072383659,
+        "action_distribution": {
+          "decrease": 150,
+          "maintain": 319,
+          "increase": 31
+        },
+        "execution_time": 8.810358047485352
+      }
+    ]
+  }
+}

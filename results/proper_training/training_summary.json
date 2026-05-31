@@ -1,0 +1,11 @@
+{
+  "gnn_epochs": 500,
+  "physics_epochs": 150,
+  "gnn_loss_start": 0.5438680052757263,
+  "gnn_loss_end": 0.16572612524032593,
+  "gnn_pct_drop": 69.53,
+  "physics_loss_start": 0.36524584889411926,
+  "physics_loss_end": 0.15853208303451538,
+  "physics_pct_drop": 56.6,
+  "total_time_s": 163.4
+}

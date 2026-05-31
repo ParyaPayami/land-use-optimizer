@@ -690,9 +690,27 @@ class MultiAgentEnvironment:
                 embeddings = self.gnn.get_embeddings(self.graph)
                 self.state = embeddings['parcel'][:self.num_parcels]
         else:
-            self.state = self.graph['parcel'].x[:self.num_parcels].clone()
+            self.state = self._get_baseline_state()
         
         return self.state
+    
+    def _get_baseline_state(self) -> torch.Tensor:
+        """Get spatial-aware MLP baseline state when GNN is disabled."""
+        raw_x = self.graph['parcel'].x[:self.num_parcels].clone()
+        try:
+            edge_index = self.graph['parcel', 'adjacent_to', 'parcel'].edge_index
+        except AttributeError:
+            edge_index = torch.empty((2, 0), dtype=torch.long, device=raw_x.device)
+            
+        if edge_index.shape[1] == 0:
+            return torch.cat([raw_x, torch.zeros_like(raw_x)], dim=1)
+            
+        src, dst = edge_index
+        deg = torch.bincount(src, minlength=self.num_parcels).clamp(min=1).unsqueeze(1).float()
+        neighbor_x = torch.zeros_like(raw_x)
+        neighbor_x.index_add_(0, src, raw_x[dst])
+        neighbor_x = neighbor_x / deg
+        return torch.cat([raw_x, neighbor_x], dim=1)
     
     def step(
         self, 
@@ -767,7 +785,7 @@ class MultiAgentEnvironment:
                     embeddings = self.gnn.get_embeddings(self.graph)
                     self.state = embeddings['parcel'][:self.num_parcels]
                 else:
-                    self.state = self.graph['parcel'].x[:self.num_parcels].clone()
+                    self.state = self._get_baseline_state()
         
         # Check termination
         done = legal_violations == 0 and physics_violations == 0
@@ -1171,9 +1189,11 @@ class MARLTrainer:
                 elapsed = time.time() - t0
                 iter_time = time.time() - iter_t
                 avg_loss = np.mean([l.get('total', 0) for l in losses.values()])
+                avg_reward = np.mean([l.get('mean_reward', 0) for l in losses.values()])
                 self._log.info(
                     f"Iteration {iteration:3d}/{num_iterations}  "
                     f"avg_loss={avg_loss:.4f}  "
+                    f"avg_reward={avg_reward:.4f}  "
                     f"iter={iter_time:.1f}s  "
                     f"elapsed={elapsed:.0f}s"
                 )
@@ -1222,7 +1242,7 @@ class MARLTrainer:
         
         for agent_type, agent in self.agents.items():
             if not self.memory[agent_type]:
-                losses[agent_type] = {'total': 0.0, 'actor_loss': 0.0, 'critic_loss': 0.0, 'entropy': 0.0}
+                losses[agent_type] = {'total': 0.0, 'actor_loss': 0.0, 'critic_loss': 0.0, 'entropy': 0.0, 'mean_reward': 0.0}
                 continue
             
             device = next(agent.parameters()).device
@@ -1345,6 +1365,7 @@ class MARLTrainer:
                 'actor_loss': actor_loss_val / num_updates,
                 'critic_loss': critic_loss_val / num_updates,
                 'entropy': entropy_val / num_updates,
+                'mean_reward': rewards.mean().item(),
             }
             
             # Clear memory

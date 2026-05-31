@@ -1,0 +1,62 @@
+[
+  {
+    "parcel_id": 59,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Maintain"
+  },
+  {
+    "parcel_id": 67,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Decrease"
+  },
+  {
+    "parcel_id": 88,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Decrease"
+  },
+  {
+    "parcel_id": 147,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Increase"
+  },
+  {
+    "parcel_id": 155,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Decrease"
+  },
+  {
+    "parcel_id": 192,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Decrease"
+  },
+  {
+    "parcel_id": 243,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Increase"
+  },
+  {
+    "parcel_id": 279,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Increase"
+  },
+  {
+    "parcel_id": 281,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Increase"
+  },
+  {
+    "parcel_id": 285,
+    "resident_proposed": "Decrease",
+    "developer_proposed": "Increase",
+    "consensus_outcome": "Increase"
+  }
+]

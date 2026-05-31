@@ -592,7 +592,7 @@ class UrbanOptSystem:
                     parcel_embeddings = embeddings
                 state_dim = parcel_embeddings.shape[1]
         else:
-            state_dim = self.graph['parcel'].x.shape[1]
+            state_dim = self.graph['parcel'].x.shape[1] * 2  # Raw + local density
         
         # Create trainer
         trainer = MARLTrainer(

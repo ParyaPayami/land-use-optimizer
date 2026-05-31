@@ -75,7 +75,7 @@ df = load_data()
 # -----------------------------------------------------------------------------
 with st.sidebar:
     st.title("PIMALUOS: NYC Land Use Optimization")
-    st.caption("v3.0 | Full-Scale Simulation")
+    st.caption("v0.1.0 | Full-Scale Simulation")
     
     st.subheader("Map Layers")
     layer = st.radio("Display", ["Proposed Land Use", "Current Land Use", "ROI Lift"])

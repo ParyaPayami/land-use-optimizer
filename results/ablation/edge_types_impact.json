@@ -1,0 +1,101 @@
+{
+  "all_edges": {
+    "edge_types": [
+      "spatial_adjacency",
+      "visual_connectivity",
+      "functional_similarity",
+      "infrastructure",
+      "regulatory_coupling"
+    ],
+    "num_edge_types": 5,
+    "num_edges": 5888,
+    "final_pretrain_loss": 0.5404033660888672,
+    "final_physics_loss": 0.3412920832633972,
+    "embedding_variance": 0.007813110016286373,
+    "embedding_mean_norm": 0.6444454789161682,
+    "total_time": 6.990339040756226
+  },
+  "all_edges_no_physics": {
+    "edge_types": [
+      "spatial_adjacency",
+      "visual_connectivity",
+      "functional_similarity",
+      "infrastructure",
+      "regulatory_coupling"
+    ],
+    "num_edge_types": 5,
+    "num_edges": 5888,
+    "final_pretrain_loss": 0.5404033660888672,
+    "final_physics_loss": 0.22256042063236237,
+    "embedding_variance": 0.007813110016286373,
+    "embedding_mean_norm": 0.6444690227508545,
+    "total_time": 6.945785045623779
+  },
+  "no_functional": {
+    "edge_types": [
+      "spatial_adjacency",
+      "visual_connectivity",
+      "infrastructure",
+      "regulatory_coupling"
+    ],
+    "num_edge_types": 4,
+    "num_edges": 5190,
+    "final_pretrain_loss": 0.5418879389762878,
+    "final_physics_loss": 0.3419589102268219,
+    "embedding_variance": 0.007813110016286373,
+    "embedding_mean_norm": 0.6978650689125061,
+    "total_time": 6.841669797897339
+  },
+  "no_regulatory": {
+    "edge_types": [
+      "spatial_adjacency",
+      "visual_connectivity",
+      "functional_similarity",
+      "infrastructure"
+    ],
+    "num_edge_types": 4,
+    "num_edges": 1650,
+    "final_pretrain_loss": 0.5427442193031311,
+    "final_physics_loss": 0.3409251868724823,
+    "embedding_variance": 0.007813110016286373,
+    "embedding_mean_norm": 0.6678301692008972,
+    "total_time": 6.7916929721832275
+  },
+  "spatial_only": {
+    "edge_types": [
+      "spatial_adjacency",
+      "visual_connectivity"
+    ],
+    "num_edge_types": 2,
+    "num_edges": 660,
+    "final_pretrain_loss": 0.5404317378997803,
+    "final_physics_loss": 0.35976696014404297,
+    "embedding_variance": 0.007813110016286373,
+    "embedding_mean_norm": 0.5386831164360046,
+    "total_time": 6.8616108894348145
+  },
+  "functional_only": {
+    "edge_types": [
+      "functional_similarity"
+    ],
+    "num_edge_types": 1,
+    "num_edges": 698,
+    "final_pretrain_loss": 0.5492412447929382,
+    "final_physics_loss": 0.3341894745826721,
+    "embedding_variance": 0.007813108153641224,
+    "embedding_mean_norm": 0.765506386756897,
+    "total_time": 6.747418165206909
+  },
+  "regulatory_only": {
+    "edge_types": [
+      "regulatory_coupling"
+    ],
+    "num_edge_types": 1,
+    "num_edges": 4238,
+    "final_pretrain_loss": 0.549008309841156,
+    "final_physics_loss": 0.33522239327430725,
+    "embedding_variance": 0.007813108153641224,
+    "embedding_mean_norm": 0.7749084830284119,
+    "total_time": 6.847027063369751
+  }
+}

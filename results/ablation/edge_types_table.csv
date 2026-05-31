@@ -1,0 +1,8 @@
+Configuration,Num Edge Types,Total Edges,Physics Loss↓,Embedding Var,Time(s)
+All Edges,5,5888,0.3413,0.0078,7.0
+All Edges No Physics,5,5888,0.2226,0.0078,6.9
+No Functional,4,5190,0.3420,0.0078,6.8
+No Regulatory,4,1650,0.3409,0.0078,6.8
+Spatial Only,2,660,0.3598,0.0078,6.9
+Functional Only,1,698,0.3342,0.0078,6.7
+Regulatory Only,1,4238,0.3352,0.0078,6.8
