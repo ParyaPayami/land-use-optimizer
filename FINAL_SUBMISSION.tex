@@ -22,7 +22,7 @@
 
 \begin{frontmatter}
 
-\title{PIMALUOS: An Open-Source Physical-Infrastructure Multi-Agent Framework for Urban Land-Use Optimization}
+\title{PIMALUOS: An Open-Source Physics-Informed Multi-Agent Framework for Urban Land-Use Optimization}
 
 \author[uwm]{Parya Payami\corref{corresponding}}
 \ead{ppayami@uwm.edu}
@@ -34,7 +34,7 @@
             country={USA}}
 
 \begin{abstract}
-Urban land-use optimization is a complex multi-stakeholder problem constrained by regulatory frameworks and physical infrastructure. We introduce PIMALUOS (Physical-Infrastructure Multi-Agent Land-Use Optimization Software), an open-source Python framework that integrates GNN spatial learning with non-differentiable regulatory, voting, and multi-objective optimization components in a single, unified digital twin verification loop. We demonstrate the framework on the entirety of Manhattan's 42,075-parcel dataset. Evaluations show that rather than focusing solely on raw density maximization, PIMALUOS achieves a balanced, high-entropy mixed-use layout that prevents the zero-entropy diversity collapse of standard optimization while steering spatial development to satisfy physical environmental, transportation, and solar infrastructure capacities ($77,665,494$\,sq\,ft buildable floor area vs. $77,341,970$ without GNN). We provide the complete open-source Python software package, empirically validate its cooperative multi-agent mechanisms against single-agent baselines, and report the resultant economic and environmental Pareto frontiers. Source code, a reproducible single-command pipeline, processed datasets, and figure replication scripts are publicly available.
+Urban land-use optimization is a complex multi-stakeholder problem constrained by regulatory frameworks and physical infrastructure. We introduce PIMALUOS (Physics-Informed Multi-Agent Land-Use Optimization Software), an open-source Python framework that integrates GNN spatial learning with non-differentiable regulatory, voting, and multi-objective optimization components in a single, unified digital twin verification loop. We demonstrate the framework on the entirety of Manhattan's 42,075-parcel dataset. Evaluations show that rather than focusing solely on raw density maximization, PIMALUOS achieves a balanced, high-entropy mixed-use layout that prevents the zero-entropy diversity collapse of standard optimization while steering spatial development to satisfy physical environmental, transportation, and solar infrastructure capacities ($77,665,494$\,sq\,ft buildable floor area vs. $77,341,970$ without GNN). We provide the complete open-source Python software package, empirically validate its cooperative multi-agent mechanisms against single-agent baselines, and report the resultant economic and environmental Pareto frontiers. Source code, a reproducible single-command pipeline, processed datasets, and figure replication scripts are publicly available.
 \end{abstract}
 
 \begin{keyword}
@@ -55,7 +55,7 @@ The modern city is a highly interconnected system of systems \cite{batty2013new}
 
 A unified urban science requires integrating three emerging paradigms: Graph Neural Networks (GNNs) for modeling parcel-level spatial and regulatory networks \cite{jin2023spatio,zheng2023spatial}, Large Language Models (LLMs) for converting unstructured zoning documents into computable rules, and Multi-Agent Reinforcement Learning (MARL) for negotiating trade-offs among conflicting urban stakeholders.
 
-We present PIMALUOS, a Physical-Infrastructure Multi-Agent Land-Use Optimization Software designed around a modular "Sense-Reason-Verify" digital twin architecture (Figure~\ref{fig:architecture}):
+We present PIMALUOS, a Physics-Informed Multi-Agent Land-Use Optimization Software designed around a modular "Sense-Reason-Verify" digital twin architecture (Figure~\ref{fig:architecture}):
 \begin{enumerate}
     \item \textbf{Sense (Perception)}: A heterogeneous graph maps parcel relationships across five edge types (spatial, visual, functional, infrastructural, and regulatory).
     \item \textbf{Reason (Knowledge \& Negotiation)}: An LLM-RAG pipeline extracts bulk zoning constraints directly from regulatory texts, while PPO stakeholder agents negotiate optimal land-use and floor area ratio (FAR) allocations.
@@ -652,11 +652,10 @@ Table~\ref{tab:features} details the 57-dimensional raw feature vector construct
 %% ============================================================================
 
 \section*{Acknowledgments}
-
-This research was supported by the University of Wisconsin Milwaukee. The author thanks the open-source community for the foundational tools (OSMnx, PyTorch Geometric, LangChain) that made this work possible.
+The author thanks the School of Architecture and Urban Planning at the University of Wisconsin Milwaukee for academic support. The author also thanks the open-source urban data science community for the foundational tools, including OSMnx, PyTorch Geometric, and LangChain, that made this integrated framework possible.
 
 \section*{Declaration of generative AI and AI-assisted technologies in the manuscript preparation process}
-During the preparation of this work the author(s) used Antigravity (a powerful agentic AI coding assistant designed by Google DeepMind) in order to support manuscript structure coordination, technical terminology harmonization, RAG validation benchmark generation, and formatting improvements. After using this tool/service, the author(s) reviewed and edited the content as needed and take(s) full responsibility for the content of the published article.
+\textbf{Statement:} During the preparation of this work the author(s) used Antigravity Gemini, ChatGPT, Claude, and Grok in order to support coding and formatting improvements. After using this tool/service, the author(s) reviewed and edited the content as needed and take(s) full responsibility for the content of the published article.
 
 %% ============================================================================
 %% REFERENCES
