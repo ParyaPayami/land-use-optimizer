@@ -167,6 +167,36 @@ def main():
         bold_prefix="Statement: "
     )
 
+    doc.add_page_break()
+
+    # =========================================================================
+    # DOCUMENT 4: RESEARCH HIGHLIGHTS
+    # =========================================================================
+    add_custom_heading("Research Highlights", level=1, space_before=12, space_after=12)
+    
+    add_custom_paragraph(
+        "Highlights consist of a short collection of bullet points that convey the core findings and provide "
+        "readers with a quick textual overview of the article. They are brief, single-sentence points that "
+        "summarize the paper. In accordance with Computers, Environment and Urban Systems (CEUS) / Elsevier "
+        "guidelines, these are 5 highlights, each strictly within the 85-character limit (including spaces):"
+    )
+
+    highlights = [
+        "An open-source Python framework integrates GNNs, RAG-LLMs, and multi-agent systems.",
+        "Models urban parcels as a heterogeneous graph with five distinct edge types.",
+        "A RAG-LLM parser digitizes complex zoning codes with over 96% extraction accuracy.",
+        "MARL agents negotiate multi-objective land-use and stakeholder trade-offs.",
+        "Validated on Manhattan's 42,075 parcels, satisfying infrastructure limits."
+    ]
+
+    for highlight in highlights:
+        p_bullet = doc.add_paragraph(style='List Bullet')
+        p_bullet.paragraph_format.space_after = Pt(8)
+        p_bullet.paragraph_format.line_spacing = 1.15
+        run_bullet = p_bullet.add_run(highlight)
+        run_bullet.font.name = 'Calibri'
+        run_bullet.font.size = Pt(11)
+
     output_path = Path("./Submission_Documents.docx")
     doc.save(output_path)
     print(f"Successfully generated complete Word submission document at {output_path.resolve()}!")
