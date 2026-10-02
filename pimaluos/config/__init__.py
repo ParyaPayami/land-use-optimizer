@@ -1,17 +1,5 @@
-"""
-PIMALUOS Configuration Module
+"""Configuration."""
 
-Contains centralized configuration and city-specific settings.
-"""
+from pimaluos.config.settings import CityConfig, Settings, get_available_cities, get_city_config, get_settings
 
-from pimaluos.config.settings import (
-    Settings,
-    get_settings,
-    get_city_config,
-)
-
-__all__ = [
-    "Settings",
-    "get_settings",
-    "get_city_config",
-]
+__all__ = ["CityConfig", "Settings", "get_available_cities", "get_city_config", "get_settings"]

@@ -1,0 +1,11 @@
+# Synthetic city, tiny budgets: verifies that every stage runs (used in CI).
+# Numbers produced with this config are NOT results and must not be reported.
+city: synthetic
+synthetic: {n_blocks_x: 4, n_blocks_y: 5, lots_per_block: 8, seed: 0}
+seeds: [0, 1]
+gnn: {epochs: 20, patience: 20, hidden_channels: 64, embed_dim: 32, heads: 4}
+edge_ablation: {enabled: true, seeds: [0], epochs: 10}
+marl: {iterations: 4, horizon: 4, delta_far: 0.5}
+nash: {enabled: true, n_lots: 15}
+voting_sensitivity: {enabled: true, developer_weights: [0.1, 0.3]}
+pareto: {enabled: true, seeds: [0], pop_size: 20, generations: 5, n_partitions: 3}

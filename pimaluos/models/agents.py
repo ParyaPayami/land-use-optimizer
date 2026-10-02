@@ -1,1404 +1,355 @@
 """
-PIMALUOS Multi-Agent Reinforcement Learning Module
+Stakeholder agents, consensus voting and the multi-agent FAR environment.
 
-Contains stakeholder agents for urban planning negotiation:
-- StakeholderAgent: Actor-Critic agent with awareness weights
-- UtilityFunction: Stakeholder-specific utility calculations
-- MultiAgentEnvironment: Environment for MARL training
-- ConsensusVotingMechanism: Weighted voting for action aggregation
-- AgentCommunicationChannel: Inter-agent message passing
+Decision
+    Each lot's FAR is adjusted by one of three actions, {-delta, 0, +delta}
+    (delta = 0.5 by default), starting from the existing built FAR. FAR is
+    bounded below by the existing FAR (plans add floor area; "decrease"
+    retracts an earlier increase, it never demolishes existing floor area) and
+    above by ``ub = max(zoning max FAR, existing FAR)``, so zoning compliance
+    holds by construction (a hard constraint, not a learned behaviour).
+
+Agents
+    Five stakeholder types (resident, developer, planner, environmentalist,
+    equity advocate). Each type has one policy shared over all lots
+    (parameter sharing). Each agent proposes an action for every lot; the
+    proposals are aggregated by :class:`ConsensusVotingMechanism`.
+
+State (per lot)
+    GNN embedding (or standardised raw features in the No-GNN ablation)
+    concatenated with five dynamic signals: current FAR / ub, cell V/C,
+    catchment sewer utilisation, number of lots newly shaded by this lot, and
+    the cumulative FAR change.
+
+Rewards (per lot, per agent): Eqs. (2)-(6) of the manuscript, with these
+MapPLUTO-derived proxies (no census data are joined):
+
+    resident   = w1 * HousingSupply - w2 * Congestion + w3 * GreenAccess
+    developer  = FAR / ub - gamma * Violations
+    planner    = w1 * TaxRevenue + w2 * InfraEfficiency - w3 * PublicCost
+    environment= -Impervious + SolarAccess - FloodExposure
+    equity     = -DisplacementRisk - GreenGini
+
+    HousingSupply    added residential floor area / lot area (FAR units)
+    Congestion       max(0, V/C - threshold) of the lot's traffic cell
+    GreenAccess      open space per resident in the 3x3 cell neighbourhood,
+                     divided by its city-wide existing median
+    Violations       1 if the lot contributes to any capacity violation
+    TaxRevenue       added floor area x assessed value per building sq ft,
+                     scaled by the city-wide median value per lot sq ft
+    InfraEfficiency  1 - Congestion
+    PublicCost       max(0, sewer utilisation - 1) of the lot's catchment
+    Impervious       change in footprint coverage
+    SolarAccess      - (lots newly shaded by this lot)
+    FloodExposure    added FAR on lots in the 2007/2015 FEMA flood zones
+    DisplacementRisk added FAR on vulnerable residential lots (bottom quartile
+                     of assessed value per unit)
+    GreenGini        city-wide Gini of green space per resident (shared)
+
+    ``physics_weight`` scales every capacity-derived term (Congestion,
+    Violations, PublicCost, SolarAccess); setting it to 0 gives the
+    "no capacity feedback" ablation.
 """
 
-from abc import ABC, abstractmethod
-from pathlib import Path
+from __future__ import annotations
+
+from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
-from collections import deque
-import yaml
-import random
 
 import numpy as np
-import pandas as pd
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
 from torch.distributions import Categorical
-import math
-from pimaluos.config.land_use_config import (
-    LAND_USE_CATEGORIES, 
-    LAND_USE_CODES, 
-    COMPATIBILITY_MATRIX,
-    get_compatibility
-)
+
+from pimaluos.physics.capacity import CapacityModel
+from pimaluos.physics.verification import contributing_lots
+
+AGENT_TYPES = ["resident", "developer", "planner", "environmentalist", "equity_advocate"]
+ACTION_DECREASE, ACTION_MAINTAIN, ACTION_INCREASE = 0, 1, 2
+N_DYNAMIC = 5
+
+DEFAULT_VOTING_WEIGHTS = {
+    "resident": 0.20, "developer": 0.20, "planner": 0.20,
+    "environmentalist": 0.20, "equity_advocate": 0.20,
+}
 
 
-class StakeholderAgent(nn.Module):
-    """
-    Actor-Critic agent representing a stakeholder type.
-    
-    Uses awareness matrix from dissertation to weight utility components:
-    - self: Own parcel/neighborhood concerns
-    - local: Adjacent parcel considerations
-    - global: City-wide impact
-    - equity: Fairness and inclusion
-    
-    Args:
-        state_dim: Dimension of state space (GNN embeddings)
-        action_dim: Dimension of action space
-        hidden_dim: Hidden layer dimension
-        agent_type: Type of stakeholder
-        awareness_weights: Optional custom awareness weights
-    """
-    
-    # Default awareness profiles by agent type
-    DEFAULT_AWARENESS = {
-        'resident': {'self': 0.5, 'local': 0.3, 'global': 0.1, 'equity': 0.1},
-        'developer': {'self': 0.7, 'local': 0.2, 'global': 0.05, 'equity': 0.05},
-        'planner': {'self': 0.1, 'local': 0.2, 'global': 0.5, 'equity': 0.2},
-        'environmentalist': {'self': 0.1, 'local': 0.2, 'global': 0.4, 'equity': 0.3},
-        'equity_advocate': {'self': 0.1, 'local': 0.2, 'global': 0.2, 'equity': 0.5},
-    }
-    
-    def __init__(
-        self, 
-        state_dim: int, 
-        action_dim: int, 
-        hidden_dim: int = 128,
-        agent_type: str = 'resident', 
-        awareness_weights: Optional[Dict[str, float]] = None
-    ):
-        super().__init__()
-        
-        self.agent_type = agent_type
-        self.state_dim = state_dim
-        self.action_dim = action_dim
-        
-        # Awareness matrix
-        self.awareness = awareness_weights or self.DEFAULT_AWARENESS.get(
-            agent_type, self.DEFAULT_AWARENESS['resident']
-        )
-        
-        # Actor network (policy)
-        self.actor = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, action_dim),
-            nn.Softmax(dim=-1)
-        )
-        
-        # Critic network (value function)
-        self.critic = nn.Sequential(
-            nn.Linear(state_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, 1)
-        )
-    
-    def forward(
-        self, 
-        state: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Forward pass.
-        
-        Args:
-            state: State tensor [batch, state_dim]
-            
-        Returns:
-            Tuple of (action_probs, state_value)
-        """
-        action_probs = self.actor(state)
-        state_value = self.critic(state)
-        return action_probs, state_value
-    
-    def select_action(
-        self, 
-        state: torch.Tensor, 
-        deterministic: bool = False
-    ) -> Tuple[int, float]:
-        """
-        Select action using current policy (single parcel).
-        
-        Args:
-            state: State tensor [1, state_dim]
-            deterministic: Whether to use greedy action selection
-            
-        Returns:
-            Tuple of (action, log_prob)
-        """
-        action_probs, _ = self.forward(state)
-        
-        if deterministic:
-            action = torch.argmax(action_probs, dim=-1)
-            log_prob = torch.log(action_probs.gather(-1, action.unsqueeze(-1))).squeeze(-1)
-        else:
-            dist = Categorical(action_probs)
-            action = dist.sample()
-            log_prob = dist.log_prob(action)
-        
-        return action.item(), log_prob.item()
-
-    def select_action_batch(
-        self,
-        states: torch.Tensor,
-        deterministic: bool = False
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Batched action selection for ALL parcels at once.
-
-        Args:
-            states: State tensor [num_parcels, state_dim]
-            deterministic: Whether to use greedy action selection
-
-        Returns:
-            Tuple of (actions [num_parcels], log_probs [num_parcels])
-        """
-        with torch.no_grad():
-            action_probs, values = self.forward(states)
-
-        if deterministic:
-            actions = torch.argmax(action_probs, dim=-1)
-            log_probs = torch.log(
-                action_probs.gather(-1, actions.unsqueeze(-1)) + 1e-10
-            ).squeeze(-1)
-        else:
-            dist = Categorical(action_probs)
-            actions = dist.sample()
-            log_probs = dist.log_prob(actions)
-
-        return actions, log_probs, values.squeeze(-1)
-    
-    def evaluate_actions(
-        self, 
-        states: torch.Tensor, 
-        actions: torch.Tensor
-    ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-        """
-        Evaluate actions for PPO update.
-        
-        Args:
-            states: Batch of states
-            actions: Batch of actions
-            
-        Returns:
-            Tuple of (values, log_probs, entropy)
-        """
-        action_probs, values = self.forward(states)
-        
-        dist = Categorical(action_probs)
-        log_probs = dist.log_prob(actions)
-        entropy = dist.entropy()
-        
-        return values.squeeze(-1), log_probs, entropy
-
-
-def load_stakeholder_profiles(yaml_path: str) -> Dict[str, Dict]:
-    """
-    Load configurable stakeholder profiles from YAML.
-    
-    Args:
-        yaml_path: Path to YAML configuration file
-        
-    Returns:
-        Dictionary of stakeholder profiles
-    """
-    with open(yaml_path) as f:
-        config = yaml.safe_load(f)
-    
-    return config.get('stakeholders', {})
-
-
-class UtilityFunction:
-    """
-    Defines utility/reward functions for each stakeholder type.
-    
-    Each utility function computes a weighted sum of:
-    - Self utility: Own parcel conditions
-    - Local utility: Neighborhood quality
-    - Global utility: City-wide impact
-    - Equity utility: Fairness considerations
-    """
-    
-    @staticmethod
-    def compute_utility(
-        state: Dict[str, float], 
-        awareness: Dict[str, float],
-        utility_fn: str
-    ) -> float:
-        """
-        Generic utility computation.
-        
-        Args:
-            state: State features dictionary
-            awareness: Awareness weights
-            utility_fn: Utility function name
-            
-        Returns:
-            Computed utility value
-        """
-        utility_fns = {
-            'resident': UtilityFunction.resident_utility,
-            'developer': UtilityFunction.developer_utility,
-            'planner': UtilityFunction.planner_utility,
-            'environmentalist': UtilityFunction.environmentalist_utility,
-            'equity_advocate': UtilityFunction.equity_advocate_utility,
-        }
-        
-        if utility_fn not in utility_fns:
-            raise ValueError(f"Unknown utility function: {utility_fn}")
-        
-        return utility_fns[utility_fn](state, awareness)
-    
-    @staticmethod
-    def resident_utility(state: Dict, awareness: Dict) -> float:
-        """Resident: housing affordability + amenity access + environment."""
-        self_utility = (
-            state.get('housing_affordability', 0) * 0.4 +
-            state.get('park_access', 0) * 0.3 +
-            state.get('safety', 0) * 0.3
-        )
-        local_utility = (
-            state.get('local_amenities', 0) * 0.5 +
-            state.get('local_green_space', 0) * 0.5
-        )
-        global_utility = state.get('citywide_livability', 0)
-        equity_utility = 1.0 - state.get('displacement_risk', 0)
-        
-        return (
-            awareness['self'] * self_utility +
-            awareness['local'] * local_utility +
-            awareness['global'] * global_utility +
-            awareness['equity'] * equity_utility
-        ) + state.get('infrastructure_efficiency', 0) * 0.4  # Reward for efficiency (low congestion)
-
-    
-    @staticmethod
-    def developer_utility(state: Dict, awareness: Dict) -> float:
-        """Developer: ROI + development speed."""
-        self_utility = (
-            state.get('development_potential', 0) * 0.6 +
-            state.get('property_value', 0) * 0.4
-        )
-        local_utility = state.get('local_market_demand', 0)
-        global_utility = state.get('citywide_growth', 0)
-        equity_utility = state.get('affordable_housing_bonus', 0)
-        
-        return (
-            awareness['self'] * self_utility +
-            awareness['local'] * local_utility +
-            awareness['global'] * global_utility +
-            awareness['equity'] * equity_utility
-        )
-    
-    @staticmethod
-    def planner_utility(state: Dict, awareness: Dict) -> float:
-        """City planner: tax revenue + service efficiency + sustainability."""
-        self_utility = state.get('parcel_tax_revenue', 0)
-        local_utility = (
-            state.get('infrastructure_efficiency', 0) * 0.6 +
-            state.get('service_coverage', 0) * 0.4
-        )
-        global_utility = (
-            state.get('citywide_tax_base', 0) * 0.3 +
-            state.get('economic_growth', 0) * 0.3 +
-            state.get('sustainability', 0) * 0.4
-        )
-        equity_utility = (
-            state.get('spatial_equity', 0) * 0.5 +
-            state.get('affordable_housing_ratio', 0) * 0.5
-        )
-        
-        return (
-            awareness['self'] * self_utility +
-            awareness['local'] * local_utility +
-            awareness['global'] * global_utility +
-            awareness['equity'] * equity_utility
-        ) * (1.0 + state.get('citywide_livability', 0)) # Bonus for diversity
-
-    
-    @staticmethod
-    def environmentalist_utility(state: Dict, awareness: Dict) -> float:
-        """Environmentalist: carbon reduction + green space + resilience."""
-        self_utility = state.get('parcel_green_coverage', 0)
-        local_utility = (
-            state.get('local_tree_canopy', 0) * 0.5 +
-            state.get('stormwater_management', 0) * 0.5
-        )
-        global_utility = (
-            state.get('citywide_carbon_emissions', 0) * 0.4 +
-            state.get('climate_resilience', 0) * 0.3 +
-            state.get('biodiversity', 0) * 0.3
-        )
-        equity_utility = state.get('environmental_justice', 0)
-        
-        return (
-            awareness['self'] * self_utility +
-            awareness['local'] * local_utility +
-            awareness['global'] * global_utility +
-            awareness['equity'] * equity_utility
-        )
-    
-    @staticmethod
-    def equity_advocate_utility(state: Dict, awareness: Dict) -> float:
-        """Equity advocate: fairness + access + inclusion."""
-        self_utility = state.get('local_equity_index', 0)
-        local_utility = (
-            state.get('affordable_housing_access', 0) * 0.5 +
-            state.get('amenity_access_equity', 0) * 0.5
-        )
-        global_utility = (
-            state.get('citywide_gini_coefficient', 0) * 0.5 +
-            state.get('segregation_index', 0) * 0.5
-        )
-        equity_utility = (
-            state.get('displacement_prevention', 0) * 0.4 +
-            state.get('inclusion_score', 0) * 0.3 +
-            state.get('opportunity_access', 0) * 0.3
-        )
-        
-        return (
-            awareness['self'] * self_utility +
-            awareness['local'] * local_utility +
-            awareness['global'] * global_utility +
-            awareness['equity'] * equity_utility
-        )
+@dataclass
+class UtilityWeights:
+    resident: Tuple[float, float, float] = (1.0, 1.0, 0.5)   # housing, congestion, green
+    developer_gamma: float = 1.0
+    planner: Tuple[float, float, float] = (1.0, 0.5, 1.0)    # tax, efficiency, public cost
+    environment: Tuple[float, float, float] = (1.0, 0.2, 1.0)  # impervious, solar, flood
+    equity: Tuple[float, float] = (1.0, 1.0)                  # displacement, gini
 
 
 class ConsensusVotingMechanism:
-    """
-    Weighted voting mechanism for aggregating multi-agent actions.
-    
-    Supports multiple voting strategies:
-    - majority: Simple majority vote
-    - weighted: Votes weighted by stakeholder priority
-    - soft: Soft voting using probability distributions
-    - nash: Nash equilibrium-based selection (uses external solver)
-    
-    Args:
-        stakeholder_weights: Dict mapping agent type to voting weight
-        voting_strategy: One of 'majority', 'weighted', 'soft', 'nash'
-    """
-    
-    def __init__(
-        self, 
-        stakeholder_weights: Optional[Dict[str, float]] = None,
-        voting_strategy: str = 'weighted'
-    ):
-        self.weights = stakeholder_weights or {
-            'resident': 0.25,
-            'developer': 0.15,
-            'planner': 0.25,
-            'environmentalist': 0.20,
-            'equity_advocate': 0.15,
-        }
-        self.voting_strategy = voting_strategy
-    
-    def aggregate_votes(
-        self, 
-        agent_actions: Dict[str, List[int]],
-        action_probs: Optional[Dict[str, torch.Tensor]] = None
-    ) -> List[int]:
-        """
-        Aggregate actions from multiple agents.
-        
-        Args:
-            agent_actions: Dict mapping agent type to list of actions per parcel
-            action_probs: Optional action probability distributions for soft voting
-            
-        Returns:
-            List of aggregated actions per parcel
-        """
-        if self.voting_strategy == 'majority':
-            return self._majority_vote(agent_actions)
-        elif self.voting_strategy == 'weighted':
-            return self._weighted_vote(agent_actions)
-        elif self.voting_strategy == 'soft':
-            if action_probs is None:
-                raise ValueError("Soft voting requires action_probs")
-            return self._soft_vote(action_probs)
-        elif self.voting_strategy == 'nash':
-            return self._nash_equilibrium_vote(agent_actions)
-        else:
-            raise ValueError(f"Unknown voting strategy: {self.voting_strategy}")
-    
-    def _majority_vote(self, agent_actions: Dict[str, List[int]]) -> List[int]:
-        """Simple majority vote."""
-        num_parcels = len(next(iter(agent_actions.values())))
-        aggregated = []
-        
-        for parcel_idx in range(num_parcels):
-            votes = [agent_actions[agent_type][parcel_idx] 
-                     for agent_type in agent_actions]
-            aggregated.append(max(set(votes), key=votes.count))
-        
-        return aggregated
-    
-    def _weighted_vote(self, agent_actions: Dict[str, List[int]]) -> List[int]:
-        """Weighted voting based on stakeholder priorities."""
-        num_parcels = len(next(iter(agent_actions.values())))
-        action_space_size = max(max(actions) for actions in agent_actions.values()) + 1
-        
-        aggregated = []
-        
-        for parcel_idx in range(num_parcels):
-            action_weights = [0.0] * action_space_size
-            
-            for agent_type, actions in agent_actions.items():
-                action = actions[parcel_idx]
-                weight = self.weights.get(agent_type, 0.1)
-                action_weights[action] += weight
-            
-            aggregated.append(np.argmax(action_weights))
-        
-        return aggregated
-    
-    def _soft_vote(self, action_probs: Dict[str, torch.Tensor]) -> List[int]:
-        """Soft voting using probability distributions."""
-        # Average probabilities weighted by stakeholder weights
-        weighted_probs = None
-        
-        for agent_type, probs in action_probs.items():
-            weight = self.weights.get(agent_type, 0.1)
-            if weighted_probs is None:
-                weighted_probs = probs * weight
-            else:
-                weighted_probs = weighted_probs + probs * weight
-        
-        # Normalize
-        weighted_probs = weighted_probs / weighted_probs.sum(dim=-1, keepdim=True)
-        
-        # Sample or argmax
-        return torch.argmax(weighted_probs, dim=-1).tolist()
-    
-    def _nash_equilibrium_vote(self, agent_actions: Dict[str, List[int]]) -> List[int]:
-        """
-        Nash equilibrium-based selection.
-        
-        TODO: Integrate with external Nash equilibrium solver.
-        For now, falls back to weighted voting.
-        """
-        # Placeholder - would use lemke_howson or other solver
-        return self._weighted_vote(agent_actions)
+    """Weighted plurality vote per lot; ties resolve to the status quo (maintain)."""
+
+    def __init__(self, weights: Optional[Dict[str, float]] = None):
+        self.weights = dict(weights or DEFAULT_VOTING_WEIGHTS)
+
+    def aggregate(self, proposals: Dict[str, np.ndarray]) -> np.ndarray:
+        agents = list(proposals)
+        n = len(proposals[agents[0]])
+        score = np.zeros((n, 3))
+        for a in agents:
+            score[np.arange(n), np.asarray(proposals[a])] += self.weights.get(a, 0.0)
+        best = score.max(1, keepdims=True)
+        winners = np.isclose(score, best)
+        out = np.argmax(score, axis=1)
+        tie = winners.sum(1) > 1
+        out[tie & winners[:, ACTION_MAINTAIN]] = ACTION_MAINTAIN
+        # Ties not involving "maintain" (increase vs decrease) also resolve to maintain.
+        out[tie & ~winners[:, ACTION_MAINTAIN]] = ACTION_MAINTAIN
+        return out
+
+    # Backwards-compatible name.
+    aggregate_votes = aggregate
 
 
-class AgentCommunicationChannel:
-    """
-    Inter-agent message passing for negotiation.
-    
-    Enables agents to:
-    - Broadcast proposals to all agents
-    - Send targeted messages to specific agents
-    - Negotiate through multiple rounds of proposals
-    
-    Args:
-        agent_types: List of participating agent types
-        max_history: Maximum messages to keep in history
-    """
-    
-    def __init__(
-        self, 
-        agent_types: List[str],
-        max_history: int = 100
-    ):
-        self.agent_types = agent_types
-        self.message_queue: Dict[str, deque] = {
-            agent_type: deque(maxlen=max_history) 
-            for agent_type in agent_types
-        }
-        self.broadcast_history: deque = deque(maxlen=max_history)
-    
-    def broadcast(
-        self, 
-        sender: str, 
-        message: Dict
-    ) -> None:
-        """
-        Broadcast message to all agents.
-        
-        Args:
-            sender: Agent type sending the message
-            message: Message content (proposal, objection, etc.)
-        """
-        broadcast_msg = {
-            'sender': sender,
-            'type': 'broadcast',
-            'content': message,
-        }
-        
-        for agent_type in self.agent_types:
-            if agent_type != sender:
-                self.message_queue[agent_type].append(broadcast_msg)
-        
-        self.broadcast_history.append(broadcast_msg)
-    
-    def send(
-        self, 
-        sender: str, 
-        recipient: str, 
-        message: Dict
-    ) -> None:
-        """
-        Send targeted message to specific agent.
-        
-        Args:
-            sender: Agent type sending the message
-            recipient: Target agent type
-            message: Message content
-        """
-        msg = {
-            'sender': sender,
-            'type': 'direct',
-            'content': message,
-        }
-        self.message_queue[recipient].append(msg)
-    
-    def receive(self, agent_type: str) -> List[Dict]:
-        """
-        Receive all pending messages for an agent.
-        
-        Args:
-            agent_type: Agent type to receive messages for
-            
-        Returns:
-            List of messages
-        """
-        messages = list(self.message_queue[agent_type])
-        self.message_queue[agent_type].clear()
-        return messages
-    
-    def negotiate(
-        self, 
-        proposals: Dict[str, Dict],
-        max_rounds: int = 3
-    ) -> Dict[str, float]:
-        """
-        Multi-round negotiation process.
-        
-        Args:
-            proposals: Initial proposals from each agent {agent_type: proposal}
-            max_rounds: Maximum negotiation rounds
-            
-        Returns:
-            Final agreed-upon proposal weights
-        """
-        # Broadcast all proposals
-        for agent_type, proposal in proposals.items():
-            self.broadcast(agent_type, {'proposal': proposal})
-        
-        # Simple negotiation: average proposal weights
-        final_weights = {}
-        
-        for key in proposals[next(iter(proposals))].keys():
-            values = [proposals[agent_type].get(key, 0) for agent_type in proposals]
-            final_weights[key] = np.mean(values)
-        
-        return final_weights
+class StakeholderAgent(nn.Module):
+    """Actor-critic with 2 x 64 tanh MLPs (shared across lots)."""
+
+    def __init__(self, state_dim: int, agent_type: str, hidden: int = 64, action_dim: int = 3):
+        super().__init__()
+        self.agent_type = agent_type
+        self.state_dim = state_dim
+        self.actor = nn.Sequential(nn.Linear(state_dim, hidden), nn.Tanh(),
+                                   nn.Linear(hidden, hidden), nn.Tanh(), nn.Linear(hidden, action_dim))
+        self.critic = nn.Sequential(nn.Linear(state_dim, hidden), nn.Tanh(),
+                                    nn.Linear(hidden, hidden), nn.Tanh(), nn.Linear(hidden, 1))
+
+    def dist(self, s: torch.Tensor) -> Categorical:
+        return Categorical(logits=self.actor(s))
+
+    @torch.no_grad()
+    def act(self, s: torch.Tensor, deterministic: bool = False):
+        d = self.dist(s)
+        a = d.probs.argmax(-1) if deterministic else d.sample()
+        return a, d.log_prob(a), self.critic(s).squeeze(-1)
 
 
 class MultiAgentEnvironment:
-    """
-    Environment for multi-agent land-use negotiation.
-    
-    State: GNN parcel embeddings
-    Actions: Propose land-use changes (discrete FAR modifications)
-    Rewards: Stakeholder-specific utilities
-    
-    Args:
-        gnn_model: Trained ParcelGNN model
-        graph_data: HeteroData graph
-        physics_engine: MultiPhysicsEngine for simulation
-        constraint_masks: Legal constraints DataFrame
-        num_parcels: Number of parcels in environment
-    """
-    
+    """Vectorised multi-lot FAR environment over the capacity screens."""
+
     def __init__(
-        self, 
-        gnn_model,
-        graph_data,
-        physics_engine,
-        constraint_masks: pd.DataFrame,
-        num_parcels: int = 100,
-        physics_interval: int = 5,
-        use_gnn: bool = True
+        self,
+        capacity: CapacityModel,
+        static_state: np.ndarray,
+        agent_types: Optional[List[str]] = None,
+        delta_far: float = 0.5,
+        horizon: int = 10,
+        physics_weight: float = 1.0,
+        voting_weights: Optional[Dict[str, float]] = None,
+        utility_weights: Optional[UtilityWeights] = None,
     ):
-        self.gnn = gnn_model
-        self.use_gnn = use_gnn and (gnn_model is not None)
-        self.graph = graph_data
-        self.physics = physics_engine
-        self.constraints = constraint_masks
-        self.num_parcels = num_parcels
-        
-        # Action space: 6 Land Use Categories (0-5)
-        self.action_space_size = 6
-        
-        # Feature Cache for spatial lookups
-        self.feature_cache = {}
-        
-        # State dimension
-        self.state_dim = 128 if self.use_gnn else self.graph['parcel'].x.shape[1]
-        
-        # Voting mechanism
-        self.voting = ConsensusVotingMechanism(voting_strategy='weighted')
-        
-        # Communication channel
-        self.comm_channel = AgentCommunicationChannel([
-            'resident', 'developer', 'planner', 'environmentalist', 'equity_advocate'
-        ])
-        
-        # Current state
-        self.current_far: Optional[torch.Tensor] = None
-        self.state: Optional[torch.Tensor] = None
-        
-        # Physics caching — only recompute every physics_interval steps
-        self._physics_interval = physics_interval
-        self._step_counter = 0
-        self._cached_physics_results: Optional[Dict] = None
-        
-        # Pre-build land-use label lookup array for vectorised mapping
-        self._lu_labels = np.array(
-            [LAND_USE_CATEGORIES.get(i, 'RESIDENTIAL').lower() for i in range(6)]
-        )
-    
-    def reset(self) -> torch.Tensor:
-        """
-        Reset environment to initial state.
-        
-        Returns:
-            Initial state (GNN embeddings or raw features)
-        """
-        # Initialize Randomly to break symmetry and start with diversity
-        if self.use_gnn:
-            params = list(self.gnn.parameters())
-            device = params[0].device if params else 'cpu'
+        self.cap = capacity
+        self.static = np.asarray(static_state, dtype=np.float32)
+        self.n = capacity.n
+        self.agent_types = list(agent_types or AGENT_TYPES)
+        self.delta = delta_far
+        self.horizon = horizon
+        self.physics_weight = physics_weight
+        self.voting = ConsensusVotingMechanism(voting_weights)
+        self.w = utility_weights or UtilityWeights()
+        self.state_dim = self.static.shape[1] + N_DYNAMIC
+        base = capacity.baseline
+        self.green_ref = float(np.median(base["green_per_capita"][capacity.is_res])) if capacity.is_res.any() else 1.0
+        self.green_ref = max(self.green_ref, 1e-6)
+        vpls = capacity.value_per_bldg_sqft
+        self.value_scale = float(np.median(vpls)) if np.isfinite(vpls).any() else 1.0
+        self.reset()
+
+    # ---------------------------------------------------------------- dynamics
+    def reset(self) -> np.ndarray:
+        self.t = 0
+        self.far = self.cap.far0.copy()
+        self.result = self.cap.baseline
+        self.utilities = self._utilities(self.result)
+        return self._state()
+
+    def _state(self) -> np.ndarray:
+        r = self.result
+        ub = np.maximum(self.cap.ub, 1e-6)
+        dyn = np.column_stack([
+            self.far / ub,
+            r["vc_lot"],
+            r["sewer_util_lot"],
+            np.minimum(r["shadow_imposed"], 10) / 10.0,
+            (self.far - self.cap.far0) / max(self.delta * self.horizon, 1e-6),
+        ]).astype(np.float32)
+        return np.concatenate([self.static, dyn], axis=1)
+
+    def apply(self, actions: np.ndarray) -> np.ndarray:
+        step = (np.asarray(actions) - 1) * self.delta
+        return np.clip(self.far + step, self.cap.far0, self.cap.ub)
+
+    def _utilities(self, r: Dict) -> Dict[str, np.ndarray]:
+        c, w, pw = self.cap, self.w, self.physics_weight
+        dfar = r["far"] - c.far0
+        housing = dfar * c.res_share
+        congestion = np.maximum(0.0, r["vc_lot"] - c.p.vc_threshold) * r["taz_violation"][c.taz]
+        green = r["green_per_capita"] / self.green_ref
+        violations = contributing_lots(c, r).astype(float)
+        tax = dfar * c.A * c.value_per_bldg_sqft / (c.A * self.value_scale)
+        public_cost = np.maximum(0.0, r["sewer_util_lot"] - 1.0)
+        impervious = r["coverage"] - c.cov0
+        solar = -r["shadow_imposed"]
+        flood = np.maximum(dfar, 0) * c.flood
+        displacement = np.maximum(dfar, 0) * c.vulnerable
+        green_gini = r["summary"]["green_space_gini"]
+        r1, r2, r3 = w.resident
+        p1, p2, p3 = w.planner
+        e1, e2, e3 = w.environment
+        q1, q2 = w.equity
+        return {
+            "resident": r1 * housing - pw * r2 * congestion + r3 * green,
+            "developer": r["far"] / np.maximum(c.ub, 1e-6) - pw * w.developer_gamma * violations,
+            "planner": p1 * tax + p2 * (1.0 - pw * congestion) - pw * p3 * public_cost,
+            "environmentalist": -e1 * impervious + pw * e2 * solar - e3 * flood,
+            "equity_advocate": -q1 * displacement - q2 * green_gini * np.ones(c.n),
+        }
+
+    def step(self, proposals: Dict[str, np.ndarray]):
+        if len(proposals) == 1:
+            actions = np.asarray(next(iter(proposals.values())))
         else:
-            device = self.graph['parcel'].x.device
-            
-        self.current_land_use = torch.randint(0, 6, (self.num_parcels,), device=device)
-        
-        # Update Graph with new Land Use so GNN can see it
-        if hasattr(self.graph['parcel'], 'land_use_code'):
-             self.graph['parcel'].land_use_code[:self.num_parcels] = self.current_land_use
+            actions = self.voting.aggregate(proposals)
+        self.far = self.apply(actions)
+        self.result = self.cap.evaluate(self.far)
+        new_u = self._utilities(self.result)
+        rewards = {a: (new_u[a] - self.utilities[a]).astype(np.float32) for a in self.agent_types}
+        self.utilities = new_u
+        self.t += 1
+        done = self.t >= self.horizon
+        return self._state(), rewards, done, {"actions": actions}
 
-        # Initialize FAR (Keep existing logic for compatibility)
-        far_idx = 10  # Assuming FAR is at feature index 10
-        self.current_far = self.graph['parcel'].x[:self.num_parcels, far_idx].clone()
 
-        if self.use_gnn:
-            with torch.no_grad():
-                embeddings = self.gnn.get_embeddings(self.graph)
-                self.state = embeddings['parcel'][:self.num_parcels]
-        else:
-            self.state = self._get_baseline_state()
-        
-        return self.state
-    
-    def _get_baseline_state(self) -> torch.Tensor:
-        """Get spatial-aware MLP baseline state when GNN is disabled."""
-        raw_x = self.graph['parcel'].x[:self.num_parcels].clone()
-        try:
-            edge_index = self.graph['parcel', 'adjacent_to', 'parcel'].edge_index
-        except AttributeError:
-            edge_index = torch.empty((2, 0), dtype=torch.long, device=raw_x.device)
-            
-        if edge_index.shape[1] == 0:
-            return torch.cat([raw_x, torch.zeros_like(raw_x)], dim=1)
-            
-        src, dst = edge_index
-        deg = torch.bincount(src, minlength=self.num_parcels).clamp(min=1).unsqueeze(1).float()
-        neighbor_x = torch.zeros_like(raw_x)
-        neighbor_x.index_add_(0, src, raw_x[dst])
-        neighbor_x = neighbor_x / deg
-        return torch.cat([raw_x, neighbor_x], dim=1)
-    
-    def step(
-        self, 
-        actions: Dict[str, List[int]]
-    ) -> Tuple[torch.Tensor, Dict[str, float], bool, Dict]:
-        """
-        Execute actions and return next state.
-        
-        Args:
-            actions: Dict mapping agent_type to list of actions per parcel
-            
-        Returns:
-            Tuple of (next_state, rewards, done, info)
-        """
-        # Aggregate actions using voting mechanism
-        aggregated_actions = self.voting.aggregate_votes(actions)
-        
-        # Apply actions (Update FAR)
-        new_far = self._apply_actions(aggregated_actions)
-        new_land_use = self.current_land_use
-        
-        # Check zoning constraints (Land Use)
-        from pimaluos.config.zoning_compliance import count_violations
-        
-        if not hasattr(self, '_cached_zone_districts'):
-            if hasattr(self.graph['parcel'], 'zone_district'):
-                self._cached_zone_districts = [
-                    self.graph['parcel'].zone_district[i] if i < len(self.graph['parcel'].zone_district) 
-                    else 'R6'
-                    for i in range(self.num_parcels)
-                ]
-            else:
-                self._cached_zone_districts = ['R6'] * self.num_parcels
-        
-        land_use_list = new_land_use.cpu().tolist()
-        
-        # Count violations (Land Use + FAR)
-        legal_violations = count_violations(land_use_list, self._cached_zone_districts)
-        legal_violations += self._check_legal_constraints(new_far)
-        
-        # Compute local violations tensor for local credit assignment
-        max_far_vals = [self.constraints.iloc[i].get('max_far', 10.0) if i < len(self.constraints) else 10.0 for i in range(self.num_parcels)]
-        max_far_tensor = torch.tensor(max_far_vals, device=new_far.device, dtype=torch.float32)
-        local_violations = (new_far > max_far_tensor * 1.01).float()
-        
-        # Run physics simulation (cached — expensive at 42K parcels)
-        self._step_counter += 1
-        if self._cached_physics_results is None or self._step_counter % self._physics_interval == 0:
-            land_use_df = self._create_land_use_df(new_land_use, new_far)
-            self._cached_physics_results = self._run_physics(land_use_df)
-        physics_results = self._cached_physics_results
-        physics_violations = physics_results.get('violations', {}).get('total', 0)
-        
-        # Compute state features (SPATIAL & REAL)
-        state_dict = self._compute_state_features(new_land_use, new_far, physics_results)
-        
-        # Compute rewards with localized credit assignment
-        rewards = self._compute_rewards(state_dict, local_violations, physics_violations)
-        
-        # Update state
-        self.current_far = new_far
-        self.current_land_use = new_land_use
-
-        with torch.no_grad():
-            self.graph['parcel'].x[:self.num_parcels, 10] = self.current_far
-            if hasattr(self.graph['parcel'], 'land_use_code'):
-                self.graph['parcel'].land_use_code[:self.num_parcels] = self.current_land_use
-            
-            # Only recompute GNN embeddings on physics steps (expensive at 42K nodes)
-            if self._step_counter % self._physics_interval == 0:
-                if self.use_gnn:
-                    embeddings = self.gnn.get_embeddings(self.graph)
-                    self.state = embeddings['parcel'][:self.num_parcels]
-                else:
-                    self.state = self._get_baseline_state()
-        
-        # Check termination
-        done = legal_violations == 0 and physics_violations == 0
-        
-        info = {
-            'legal_violations': legal_violations,
-            'physics_violations': physics_violations,
-            'physics_results': physics_results,
-            'state_features': state_dict,
-            'aggregated_actions': aggregated_actions,
-        }
-        
-        return self.state, rewards, done, info
-    
-    def _apply_actions(self, actions: List[int]) -> torch.Tensor:
-        """Apply FAR modification actions (0=decrease, 1=maintain, 2=increase)."""
-        new_far = self.current_far.clone()
-        action_tensor = torch.tensor(actions, device=new_far.device)
-        
-        # 0: Decrease by 20%, 1: Maintain, 2: Increase by 20%
-        new_far[action_tensor == 0] *= 0.8
-        new_far[action_tensor == 2] *= 1.2
-        
-        # Clip to valid range (0.1 to max_far)
-        max_far_vals = [self.constraints.iloc[i].get('max_far', 10.0) if i < len(self.constraints) else 10.0 for i in range(self.num_parcels)]
-        max_far_tensor = torch.tensor(max_far_vals, device=new_far.device, dtype=torch.float32)
-        new_far = torch.min(new_far, max_far_tensor)
-        new_far = torch.clamp(new_far, min=0.1)
-        
-        return new_far
-    
-    def _check_legal_constraints(self, far: torch.Tensor) -> int:
-        """Check legal constraint violations."""
-        violations = 0
-        for i in range(min(len(far), len(self.constraints))):
-            max_far = self.constraints.iloc[i].get('max_far', 10.0)
-            if far[i] > max_far:
-                violations += 1
-        return violations
-    
-    def _create_land_use_df(self, land_use: torch.Tensor, far: torch.Tensor) -> pd.DataFrame:
-        """Create land use DataFrame for physics simulation (vectorised)."""
-        lu_np = land_use.cpu().numpy()
-        far_np = far.cpu().numpy()
-        labels = self._lu_labels[lu_np]  # Vectorised lookup — no per-element .item()
-        
-        return pd.DataFrame({
-            'parcel_id': np.arange(self.num_parcels),
-            'use': labels,
-            'far': far_np,
-            'height_ft': (far_np * 12).clip(0, 200),
-            'units': (far_np * 10).astype(int),
-            'lot_coverage': 0.5,
-        })
-    
-    def _run_physics(self, land_use_df: pd.DataFrame) -> Dict:
-        """Run physics simulation — uses lightweight approximation for large graphs."""
-        if self.num_parcels > 5000:
-            # Lightweight analytical approximation for large-scale MARL.
-            # The O(N²) gravity traffic model in MultiPhysicsEngine makes
-            # full simulation infeasible at 42K (takes ~30 min per call).
-            # Physics constraints are already embedded in GNN from Stage 4.
-            return self._approximate_physics(land_use_df)
-        try:
-            scenario = self.physics.prepare_scenario(land_use_df)
-            return self.physics.simulate_all(scenario)
-        except Exception:
-            return self._default_physics()
-
-    def _approximate_physics(self, land_use_df: pd.DataFrame) -> Dict:
-        """
-        Fast O(N) physics approximation for large-scale MARL.
-
-        Uses land-use proportions and density statistics to estimate
-        traffic congestion, hydrology load, and solar violations
-        without the O(N²) pairwise gravity model.
-        """
-        n = len(land_use_df)
-        use_counts = land_use_df['use'].value_counts(normalize=True)
-        avg_far = land_use_df['far'].mean()
-        avg_height = land_use_df['height_ft'].mean()
-
-        # Traffic: congestion scales with commercial/industrial density
-        commercial_frac = use_counts.get('commercial', 0) + use_counts.get('mixed', 0)
-        industrial_frac = use_counts.get('industrial', 0)
-        trip_intensity = (
-            commercial_frac * 10.0 +
-            industrial_frac * 5.0 +
-            use_counts.get('residential', 0) * 3.0
-        )
-        congestion = 1.0 + 0.15 * (trip_intensity / 5.0) ** 2
-
-        # Hydrology: imperviousness by land-use type
-        imperv = (
-            use_counts.get('commercial', 0) * 0.85 +
-            use_counts.get('industrial', 0) * 0.80 +
-            use_counts.get('mixed', 0) * 0.70 +
-            use_counts.get('residential', 0) * 0.45 +
-            use_counts.get('public', 0) * 0.50 +
-            use_counts.get('open_space', 0) * 0.10
-        )
-        capacity_util = imperv * avg_far * 0.8
-
-        # Solar: violations based on height thresholds
-        tall_buildings = (land_use_df['height_ft'] > 100).sum()
-        shadow_pct = min(avg_height / 2, 80)
-
-        violations = {'total': 0}
-        if congestion > 1.5:
-            violations['total'] += 1
-        if capacity_util > 1.0:
-            violations['total'] += 1
-        if tall_buildings > 0:
-            violations['total'] += 1
-
-        return {
-            'traffic': {
-                'avg_congestion_ratio': congestion,
-                'max_congestion_ratio': congestion * 1.3,
-                'oversaturated_links': 0,
-                'pct_oversaturated': 0,
-            },
-            'hydrology': {
-                'peak_runoff_cfs': capacity_util * 100,
-                'total_runoff_cf': capacity_util * 360000,
-                'weighted_runoff_coefficient': imperv,
-                'capacity_utilization': capacity_util,
-                'capacity_exceeded': capacity_util > 1.0,
-            },
-            'solar': {
-                'avg_shadow_pct': shadow_pct,
-                'max_shadow_pct': max(land_use_df['height_ft']) / 2,
-                'num_violations': tall_buildings,
-                'pct_parcels_violated': tall_buildings / max(n, 1) * 100,
-            },
-            'violations': violations,
-        }
-
-    @staticmethod
-    def _default_physics() -> Dict:
-        """Fallback physics results."""
-        return {
-            'traffic': {'avg_congestion_ratio': 1.0},
-            'hydrology': {'capacity_utilization': 0.5},
-            'solar': {'num_violations': 0},
-            'violations': {'total': 0},
-        }
-    
-    def _compute_state_features(
-        self, 
-        land_use: torch.Tensor,
-        far: torch.Tensor, 
-        physics_results: Dict
-    ) -> Dict[str, torch.Tensor]:
-        """Compute state features with REAL spatial awareness (vectorized over all parcels)."""
-        
-        # 1. Physics & FAR Features (Preserved)
-        congestion = physics_results.get('traffic', {}).get('avg_congestion_ratio', 1.0)
-        hydro_util = physics_results.get('hydrology', {}).get('capacity_utilization', 0.5)
-        avg_far = far.mean().item()
-        
-        # 2. Spatial Adjacency Calculation (New)
-        # Use graph edge_index for fast lookup
-        if 'spatial_adjacency' not in self.feature_cache:
-            # Pre-compute adjacency lists if not cached
-            try:
-                # Try explicit adjacency first (strongest signal)
-                edge_index = self.graph['parcel', 'adjacent_to', 'parcel'].edge_index
-            except AttributeError:
-                try:
-                    # Fallback to visual connectivity (KNN) which is robust
-                    edge_index = self.graph['parcel', 'visible_from', 'parcel'].edge_index
-                except AttributeError:
-                     # Handle case where no edges exist (e.g. sparse subset)
-                     edge_index = torch.empty((2, 0), dtype=torch.long, device=land_use.device)
-            
-            self.feature_cache['spatial_adjacency'] = edge_index
-        
-        edge_index = self.feature_cache['spatial_adjacency']
-        src, dst = edge_index
-        
-        # If no edges, return zeros/defaults for neighbor metrics
-        if edge_index.shape[1] == 0:
-            zeros = torch.zeros(self.num_parcels, device=land_use.device)
-            ones = torch.ones(self.num_parcels, device=land_use.device)
-            
-            return {
-                'housing_affordability': 1.0 - far * 0.5,
-                'park_access': zeros,
-                'safety': ones * 0.8,
-                'local_amenities': zeros,
-                'local_green_space': zeros,
-                'citywide_livability': ones * 0.7,
-                'displacement_risk': far * 0.3,
-                'development_potential': far,
-                'property_value': far * 0.8,
-                'local_market_demand': ones * 0.7,
-                'citywide_growth': ones * 0.6,
-                'affordable_housing_bonus': ones * 0.1,
-                'parcel_tax_revenue': far * 0.9,
-                'infrastructure_efficiency': ones * (1.0 - congestion * 0.3),
-                'service_coverage': ones * 0.75,
-                'citywide_tax_base': ones * (avg_far * 0.8),
-                'economic_growth': ones * (avg_far * 0.6),
-                'sustainability': ones * (1.0 - hydro_util),
-                'spatial_equity': ones * 0.6,
-                'affordable_housing_ratio': ones * 0.3,
-                'parcel_green_coverage': zeros,
-                'local_tree_canopy': zeros,
-                'stormwater_management': ones * (1.0 - hydro_util),
-                'citywide_carbon_emissions': ones * (1.0 - avg_far * 0.5),
-                'climate_resilience': ones * 0.7,
-                'biodiversity': ones * 0.6,
-                'environmental_justice': ones * 0.65,
-                'local_equity_index': ones * 0.7,
-                'affordable_housing_access': ones * (1.0 - avg_far * 0.4),
-                'amenity_access_equity': ones * 0.65,
-                'citywide_gini_coefficient': ones * (1.0 - avg_far * 0.2),
-                'segregation_index': zeros,
-                'displacement_prevention': ones * (1.0 - avg_far * 0.3),
-                'inclusion_score': ones * 0.7,
-                'opportunity_access': ones * 0.65,
-            }
-        
-        # Convert land use to one-hot for fast aggregation
-        # [Num_Parcels, 6]
-        one_hot = F.one_hot(land_use, num_classes=6).float()
-        
-        # Aggregate neighbor land uses
-        # Create a tensor to hold sum of neighbor one-hots
-        neighbor_sums = torch.zeros_like(one_hot)
-        neighbor_sums.index_add_(0, src, one_hot[dst]) # Add dst features to src index
-        
-        # Normalize by degree (count of neighbors)
-        degree = torch.zeros(self.num_parcels, device=land_use.device)
-        degree.index_add_(0, src, torch.ones_like(src, dtype=torch.float))
-        degree = degree.clamp(min=1.0).unsqueeze(1)
-        
-        neighbor_ratios = neighbor_sums / degree
-        
-        # 4. Diversity & Balance Metrics
-        # Count proportions of each type globally
-        counts = torch.bincount(land_use, minlength=6).float()
-        props = counts / len(land_use)
-        
-        # Entropy (Diversity) globally
-        start_entropy = -torch.sum(props * torch.log(props + 1e-10))
-        max_entropy = torch.log(torch.tensor(6.0))
-        normalized_entropy = start_entropy / max_entropy
-        
-        # Housing Supply Ratio globally
-        res_ratio = props[0]  # Assuming 0 is Residential
-        
-        # Local mixed-use demand/amenities (peaks when commercial neighbors ratio is 0.5)
-        com_saturation_penalty_local = 1.0 - torch.abs(neighbor_ratios[:, 1] - 0.5) * 2.0
-        com_saturation_penalty_local = torch.clamp(com_saturation_penalty_local, min=0.0)
-        
-        ones = torch.ones(self.num_parcels, device=land_use.device)
-        
-        # 5. Populate State Dict with Tensors of shape [num_parcels]
-        return {
-            'housing_affordability': 1.0 - (far * 0.3) + (neighbor_ratios[:, 0] * 0.5),
-            'park_access': neighbor_ratios[:, 5] * 2.0 + (one_hot[:, 5] * 0.5), # 5 is Open Space
-            'safety': 0.6 + neighbor_ratios[:, 0] * 0.4,
-            # Incentivize Mixed Use: Peak at 50% density locally
-            'local_amenities': com_saturation_penalty_local * 3.0 + (normalized_entropy * 0.5),
-            'local_green_space': neighbor_ratios[:, 5],
-            'citywide_livability': ones * (normalized_entropy.item() * 2.0), # Strong diversity bias
-            'displacement_risk': far * 0.3 - (neighbor_ratios[:, 0] * 0.2),
-            'development_potential': (1.0 - one_hot[:, 0]) * 0.5 + far * 0.5,
-            # Property value peaks with diversity + density locally
-            'property_value': far * 0.4 + com_saturation_penalty_local * 0.4 + (normalized_entropy * 0.2),
-            'local_market_demand': neighbor_ratios[:, 1] * 0.8,
-            'citywide_growth': far * 0.6 + (normalized_entropy * 0.4),
-            'affordable_housing_bonus': one_hot[:, 0],
-            'parcel_tax_revenue': far * 0.7 + (1.0 - one_hot[:, 0]) * 0.3,
-            'infrastructure_efficiency': ones * (1.0 - congestion * 0.8), # Stronger congestion penalty
-            'service_coverage': 0.6 + neighbor_ratios[:, 1] * 0.4,
-            'citywide_tax_base': ones * (avg_far * 0.8),
-            'economic_growth': ones * (avg_far * 0.6),
-            'sustainability': ones * (1.0 - hydro_util),
-            'spatial_equity': ones * normalized_entropy.item(),
-            'affordable_housing_ratio': ones * res_ratio,
-            'parcel_green_coverage': one_hot[:, 5],
-            'local_tree_canopy': neighbor_ratios[:, 5],
-            'stormwater_management': (1.0 - hydro_util) + one_hot[:, 5] * 0.3,
-            'citywide_carbon_emissions': ones * (1.0 - avg_far * 0.5),
-            'climate_resilience': 0.7 + one_hot[:, 5] * 0.3,
-            'biodiversity': one_hot[:, 5],
-            'environmental_justice': 0.5 + neighbor_ratios[:, 5] * 0.5,
-            'local_equity_index': ones * normalized_entropy.item(),
-            'affordable_housing_access': neighbor_ratios[:, 0],
-            'amenity_access_equity': ones * 0.65,
-            'citywide_gini_coefficient': ones * (1.0 - avg_far * 0.2),
-            'segregation_index': ones * (1.0 - normalized_entropy.item()),
-            'displacement_prevention': one_hot[:, 0],
-            'inclusion_score': ones * normalized_entropy.item(),
-            'opportunity_access': ones * 0.65,
-        }
-    
-    def _compute_rewards(
-        self, 
-        state_dict: Dict, 
-        local_violations: torch.Tensor,
-        physics_violations: int
-    ) -> Dict[str, torch.Tensor]:
-        """Compute localized rewards for each agent type."""
-        agent_types = ['resident', 'developer', 'planner', 'environmentalist', 'equity_advocate']
-        rewards = {}
-        
-        global_penalty = physics_violations * 0.1
-        
-        for agent_type in agent_types:
-            awareness = StakeholderAgent.DEFAULT_AWARENESS.get(
-                agent_type, StakeholderAgent.DEFAULT_AWARENESS['resident']
-            )
-            # utility is computed using state_dict tensors, returning shape [num_parcels]
-            utility = UtilityFunction.compute_utility(state_dict, awareness, agent_type)
-            
-            # Apply local violation penalty + global penalty
-            penalty = local_violations * 0.5 + global_penalty
-            rewards[agent_type] = utility - penalty
-        
-        return rewards
+@dataclass
+class PPOConfig:
+    lr: float = 3e-4
+    gamma: float = 0.99
+    gae_lambda: float = 0.95
+    clip: float = 0.2
+    epochs: int = 4
+    minibatch: int = 4096
+    value_coef: float = 0.5
+    entropy_coef: float = 0.01
+    max_grad_norm: float = 0.5
+    hidden: int = 64
 
 
 class MARLTrainer:
-    """
-    Trainer for multi-agent system using PPO.
+    """Independent PPO per stakeholder type, trained on vectorised episodes.
 
-    Vectorized: all parcels are processed in a single batched forward
-    pass per agent per step, making 42K-parcel runs feasible in minutes.
-
-    Args:
-        environment: MultiAgentEnvironment
-        agent_types: List of agent types to train
-        state_dim: State space dimension
-        action_dim: Action space size
+    Rewards are per-step utility *increments*, so the undiscounted return of an
+    episode equals the change in the agent's utility from existing conditions.
+    The learning rate decays linearly to zero over training.
     """
 
-    def __init__(
-        self,
-        environment: MultiAgentEnvironment,
-        agent_types: List[str],
-        state_dim: int = 128,
-        action_dim: int = 3,
-        learning_rate: float = 3e-4
-    ):
-        self.env = environment
-        self.agent_types = agent_types
+    def __init__(self, env: MultiAgentEnvironment, cfg: Optional[PPOConfig] = None, seed: int = 0):
+        self.env = env
+        self.cfg = cfg or PPOConfig()
+        torch.manual_seed(seed)
+        self.rng = np.random.default_rng(seed)
+        self.agents = {a: StakeholderAgent(env.state_dim, a, self.cfg.hidden) for a in env.agent_types}
+        self.opts = {a: torch.optim.Adam(m.parameters(), lr=self.cfg.lr) for a, m in self.agents.items()}
+        self.history: List[Dict] = []
 
-        import logging
-        self._log = logging.getLogger('pimaluos.marl')
+    def _rollout(self):
+        env = self.env
+        s = env.reset()
+        buf = {a: {"s": [], "a": [], "lp": [], "v": [], "r": []} for a in env.agent_types}
+        done = False
+        while not done:
+            st = torch.from_numpy(s)
+            props = {}
+            for a, m in self.agents.items():
+                act, lp, v = m.act(st)
+                props[a] = act.numpy()
+                buf[a]["s"].append(st)
+                buf[a]["a"].append(act)
+                buf[a]["lp"].append(lp)
+                buf[a]["v"].append(v)
+            s, rew, done, _ = env.step(props)
+            for a in env.agent_types:
+                buf[a]["r"].append(torch.from_numpy(rew[a]))
+        return buf
 
-        # Initialize agents
-        self.agents = {
-            agent_type: StakeholderAgent(state_dim, action_dim, agent_type=agent_type)
-            for agent_type in agent_types
-        }
+    def _update(self, a: str, b: Dict, frac_remaining: float) -> Dict:
+        c = self.cfg
+        m, opt = self.agents[a], self.opts[a]
+        for g in opt.param_groups:
+            g["lr"] = c.lr * frac_remaining
+        S = torch.stack(b["s"])           # [T, N, D]
+        A = torch.stack(b["a"])
+        LP = torch.stack(b["lp"])
+        V = torch.stack(b["v"])
+        R = torch.stack(b["r"])
+        T = R.shape[0]
+        adv = torch.zeros_like(R)
+        last = torch.zeros_like(R[0])
+        for t in reversed(range(T)):
+            nv = V[t + 1] if t + 1 < T else torch.zeros_like(V[0])  # episode ends at T
+            delta = R[t] + c.gamma * nv - V[t]
+            last = delta + c.gamma * c.gae_lambda * last
+            adv[t] = last
+        ret = adv + V
+        S, A, LP, ret, adv = (x.reshape(T * R.shape[1], *x.shape[2:]) for x in (S, A, LP, ret, adv))
+        adv = (adv - adv.mean()) / (adv.std() + 1e-8)
+        n = S.shape[0]
+        stats = {"actor": 0.0, "critic": 0.0, "entropy": 0.0, "k": 0}
+        for _ in range(c.epochs):
+            perm = torch.from_numpy(self.rng.permutation(n))
+            for i in range(0, n, c.minibatch):
+                idx = perm[i:i + c.minibatch]
+                d = m.dist(S[idx])
+                ratio = torch.exp(d.log_prob(A[idx]) - LP[idx])
+                s1 = ratio * adv[idx]
+                s2 = torch.clamp(ratio, 1 - c.clip, 1 + c.clip) * adv[idx]
+                actor = -torch.min(s1, s2).mean()
+                critic = (m.critic(S[idx]).squeeze(-1) - ret[idx]).pow(2).mean()
+                ent = d.entropy().mean()
+                loss = actor + c.value_coef * critic - c.entropy_coef * ent
+                opt.zero_grad()
+                loss.backward()
+                nn.utils.clip_grad_norm_(m.parameters(), c.max_grad_norm)
+                opt.step()
+                stats["actor"] += actor.item()
+                stats["critic"] += critic.item()
+                stats["entropy"] += ent.item()
+                stats["k"] += 1
+        k = max(stats.pop("k"), 1)
+        out = {key: v / k for key, v in stats.items()}
+        out["episode_return"] = float(R.sum(0).mean().item())
+        return out
 
-        # Optimizers
-        self.optimizers = {
-            agent_type: torch.optim.Adam(agent.parameters(), lr=learning_rate)
-            for agent_type, agent in self.agents.items()
-        }
+    def train(self, iterations: int, logger=None) -> List[Dict]:
+        for it in range(iterations):
+            buf = self._rollout()
+            frac = 1.0 - it / max(iterations, 1)
+            rec = {"iteration": it}
+            for a in self.env.agent_types:
+                rec[a] = self._update(a, buf[a], frac)
+            rec["plan_summary"] = self.env.result["summary"]
+            self.history.append(rec)
+            if logger and (it % 5 == 0 or it == iterations - 1):
+                rets = {a: round(rec[a]["episode_return"], 4) for a in self.env.agent_types}
+                logger.info("MARL it %d returns %s added_fa %.0f", it, rets,
+                            rec["plan_summary"]["added_floor_area_sqft"])
+        return self.history
 
-        # PPO hyperparameters
-        self.gamma = 0.99
-        self.lam = 0.95
-        self.clip_epsilon = 0.2
-        self.value_coef = 0.5
-        self.entropy_coef = 0.01
-
-        # Memory
-        self.memory = {agent_type: [] for agent_type in agent_types}
-
-    def train(
-        self,
-        num_iterations: int = 100,
-        steps_per_iteration: int = 100
-    ) -> List[Dict]:
-        """
-        Main training loop (vectorized).
-        """
-        import time
-        history = []
-
-        self._log.info("MARL TRAINING (vectorized)")
-        t0 = time.time()
-
-        for iteration in range(num_iterations):
-            iter_t = time.time()
-            # Collect trajectories (batched — all parcels at once)
-            self._collect_trajectories(steps_per_iteration)
-
-            # Update agents
-            losses = self._update_agents()
-            history.append(losses)
-
-            if iteration % 10 == 0:
-                elapsed = time.time() - t0
-                iter_time = time.time() - iter_t
-                avg_loss = np.mean([l.get('total', 0) for l in losses.values()])
-                avg_reward = np.mean([l.get('mean_reward', 0) for l in losses.values()])
-                self._log.info(
-                    f"Iteration {iteration:3d}/{num_iterations}  "
-                    f"avg_loss={avg_loss:.4f}  "
-                    f"avg_reward={avg_reward:.4f}  "
-                    f"iter={iter_time:.1f}s  "
-                    f"elapsed={elapsed:.0f}s"
-                )
-
-        total = time.time() - t0
-        self._log.info(f"MARL TRAINING COMPLETE in {total:.1f}s")
-
-        return history
-    
-    def _collect_trajectories(self, num_steps: int) -> None:
-        """Collect trajectories — vectorized over all parcels."""
-        state = self.env.reset()  # [num_parcels, state_dim]
-
-        for _ in range(num_steps):
-            actions = {}
-            log_probs = {}
-            values = {}
-
-            # Batched forward pass: one call per agent for ALL parcels
-            for agent_type, agent in self.agents.items():
-                acts, lps, vals = agent.select_action_batch(state)
-                actions[agent_type] = acts.tolist()
-                log_probs[agent_type] = lps.tolist()
-                values[agent_type] = vals.tolist()
-
-            next_state, rewards, done, _ = self.env.step(actions)
-
-            for agent_type in self.agent_types:
-                self.memory[agent_type].append({
-                    'state': state,
-                    'action': actions[agent_type],
-                    'log_prob': log_probs[agent_type],
-                    'value': values[agent_type],
-                    'reward': rewards[agent_type],
-                    'done': done,
-                })
-
-            state = next_state
-
-            if done:
-                break
-    
-    def _update_agents(self) -> Dict[str, Dict]:
-        """Update all agents using PPO with GAE and clipped surrogate objective."""
-        losses = {}
-        
-        for agent_type, agent in self.agents.items():
-            if not self.memory[agent_type]:
-                losses[agent_type] = {'total': 0.0, 'actor_loss': 0.0, 'critic_loss': 0.0, 'entropy': 0.0, 'mean_reward': 0.0}
-                continue
-            
-            device = next(agent.parameters()).device
-            
-            # Extract memory lists
-            states = torch.stack([
-                torch.as_tensor(x['state'], dtype=torch.float32, device=device)
-                for x in self.memory[agent_type]
-            ]) # Shape: [T, num_parcels, state_dim]
-            
-            actions = torch.tensor([
-                x['action'] for x in self.memory[agent_type]
-            ], dtype=torch.long, device=device) # Shape: [T, num_parcels]
-            
-            old_log_probs = torch.tensor([
-                x['log_prob'] for x in self.memory[agent_type]
-            ], dtype=torch.float32, device=device) # Shape: [T, num_parcels]
-            
-            values = torch.tensor([
-                x['value'] for x in self.memory[agent_type]
-            ], dtype=torch.float32, device=device) # Shape: [T, num_parcels]
-            
-            rewards = torch.stack([
-                torch.as_tensor(x['reward'], dtype=torch.float32, device=device)
-                for x in self.memory[agent_type]
-            ]) # Shape: [T, num_parcels]
-            
-            dones = torch.tensor([
-                1.0 if x['done'] else 0.0 for x in self.memory[agent_type]
-            ], dtype=torch.float32, device=device).unsqueeze(1).repeat(1, self.env.num_parcels) # Shape: [T, num_parcels]
-            
-            T, num_parcels = rewards.shape
-            
-            # GAE (Generalized Advantage Estimation)
-            advantages = torch.zeros_like(rewards)
-            last_gae_lam = 0.0
-            
-            with torch.no_grad():
-                if not self.memory[agent_type][-1]['done']:
-                    next_state = self.env.state # Shape: [num_parcels, state_dim]
-                    _, _, next_value = agent.select_action_batch(next_state) # next_value: [num_parcels]
-                else:
-                    next_value = torch.zeros(num_parcels, device=device)
-                
-                next_non_terminal = 1.0 - dones
-                values_all = torch.cat([values, next_value.unsqueeze(0)], dim=0) # [T+1, num_parcels]
-                
-                for t in reversed(range(T)):
-                    delta = rewards[t] + self.gamma * values_all[t+1] * next_non_terminal[t] - values_all[t]
-                    advantages[t] = last_gae_lam = delta + self.gamma * self.lam * next_non_terminal[t] * last_gae_lam
-                
-                returns = advantages + values
-            
-            # Flatten across time steps and parcels for mini-batch updates
-            flat_states = states.view(-1, agent.state_dim) # [T * num_parcels, state_dim]
-            flat_actions = actions.view(-1) # [T * num_parcels]
-            flat_old_log_probs = old_log_probs.view(-1) # [T * num_parcels]
-            flat_returns = returns.view(-1) # [T * num_parcels]
-            flat_advantages = advantages.view(-1) # [T * num_parcels]
-            
-            # Normalize advantages
-            flat_advantages = (flat_advantages - flat_advantages.mean()) / (flat_advantages.std() + 1e-8)
-            
-            # PPO Updates
-            ppo_epochs = 4
-            batch_size = 64
-            dataset_size = flat_states.shape[0]
-            optimizer = self.optimizers[agent_type]
-            
-            total_loss_val = 0.0
-            actor_loss_val = 0.0
-            critic_loss_val = 0.0
-            entropy_val = 0.0
-            
-            for _ in range(ppo_epochs):
-                permutation = torch.randperm(dataset_size)
-                for start_idx in range(0, dataset_size, batch_size):
-                    batch_indices = permutation[start_idx : start_idx + batch_size]
-                    
-                    b_states = flat_states[batch_indices]
-                    b_actions = flat_actions[batch_indices]
-                    b_old_log_probs = flat_old_log_probs[batch_indices]
-                    b_returns = flat_returns[batch_indices]
-                    b_advantages = flat_advantages[batch_indices]
-                    
-                    # Forward pass
-                    b_values, b_log_probs, b_entropy = agent.evaluate_actions(b_states, b_actions)
-                    
-                    # Policy ratio
-                    ratios = torch.exp(b_log_probs - b_old_log_probs)
-                    
-                    # Surrogate loss
-                    surr1 = ratios * b_advantages
-                    surr2 = torch.clamp(ratios, 1.0 - self.clip_epsilon, 1.0 + self.clip_epsilon) * b_advantages
-                    actor_loss = -torch.min(surr1, surr2).mean()
-                    
-                    # Critic loss
-                    critic_loss = F.mse_loss(b_values, b_returns)
-                    
-                    # Entropy loss
-                    entropy_loss = b_entropy.mean()
-                    
-                    # Combined loss
-                    loss = actor_loss + self.value_coef * critic_loss - self.entropy_coef * entropy_loss
-                    
-                    # Gradient update
-                    optimizer.zero_grad()
-                    loss.backward()
-                    nn.utils.clip_grad_norm_(agent.parameters(), max_norm=0.5)
-                    optimizer.step()
-                    
-                    total_loss_val += loss.item()
-                    actor_loss_val += actor_loss.item()
-                    critic_loss_val += critic_loss.item()
-                    entropy_val += entropy_loss.item()
-            
-            num_updates = ppo_epochs * math.ceil(dataset_size / batch_size)
-            losses[agent_type] = {
-                'total': total_loss_val / num_updates,
-                'actor_loss': actor_loss_val / num_updates,
-                'critic_loss': critic_loss_val / num_updates,
-                'entropy': entropy_val / num_updates,
-                'mean_reward': rewards.mean().item(),
-            }
-            
-            # Clear memory
-            self.memory[agent_type] = []
-            
-        return losses
-
-
-# Example usage
-if __name__ == "__main__":
-    # Create dummy agent
-    agent = StakeholderAgent(
-        state_dim=128,
-        action_dim=3,
-        agent_type='planner'
-    )
-    
-    print(f"Agent type: {agent.agent_type}")
-    print(f"Awareness: {agent.awareness}")
-    print(f"Parameters: {sum(p.numel() for p in agent.parameters()):,}")
-    
-    # Test forward pass
-    dummy_state = torch.randn(1, 128)
-    action_probs, value = agent(dummy_state)
-    print(f"\nAction probs: {action_probs}")
-    print(f"Value: {value.item():.4f}")
-    
-    # Test voting
-    voting = ConsensusVotingMechanism()
-    test_actions = {
-        'resident': [0, 1, 2, 1],
-        'developer': [2, 2, 2, 2],
-        'planner': [1, 1, 1, 1],
-    }
-    aggregated = voting.aggregate_votes(test_actions)
-    print(f"\nAggregated actions: {aggregated}")
+    @torch.no_grad()
+    def final_plan(self, deterministic: bool = True) -> Tuple[np.ndarray, List[Dict[str, np.ndarray]]]:
+        """Roll out the trained policies greedily for one episode."""
+        env = self.env
+        s = env.reset()
+        done = False
+        proposals_log = []
+        while not done:
+            st = torch.from_numpy(s)
+            props = {a: m.act(st, deterministic)[0].numpy() for a, m in self.agents.items()}
+            proposals_log.append(props)
+            s, _, done, _ = env.step(props)
+        return env.far.copy(), proposals_log

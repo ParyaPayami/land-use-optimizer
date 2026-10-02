@@ -1,282 +1,77 @@
-<div align="center">
+# PIMALUOS
 
-# 🏙️ PIMALUOS
+**Multi-agent floor-area optimisation on parcel graphs with planning-scale capacity screens.**
 
-**Physics Informed Multi-Agent Land Use Optimization Software**
+PIMALUOS takes a parcel layer (NYC MapPLUTO for Manhattan out of the box) and:
 
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
-[![PyTorch](https://img.shields.io/badge/PyTorch-2.0+-ee4c2c.svg)](https://pytorch.org/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://img.shields.io/badge/tests-40%20passed-brightgreen.svg)]()
-[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+| Layer | What it does | What it is *not* |
+|---|---|---|
+| **Sense**: `pimaluos.core` | Standardises MapPLUTO, engineers lot features (all from MapPLUTO columns or geometry), and builds a graph with five symmetric relation types: shared boundary, k-nearest proximity, identical land use among neighbours, same street, same zoning district. | Not a line-of-sight model; "proximity" is a distance relation. |
+| **Knowledge**: `pimaluos.knowledge` | LLM-RAG extraction of district base FAR limits from Zoning Resolution text, evaluated against the limits DCP publishes in MapPLUTO (`pimaluos rag-benchmark`). | The optimisation uses MapPLUTO's lot-level limits, not LLM output. |
+| **Reason**: `pimaluos.models` | Self-supervised multi-relational GAT embeddings; five stakeholder agents (PPO, shared policy per stakeholder) propose ±0.5 FAR per lot; weighted plurality vote (ties → status quo); NSGA-III over the same decision space; voting-game analysis. | Land use is not changed; the decision is floor area (FAR) per lot. |
+| **Verify**: `pimaluos.physics` | Vectorised screens: BPR travel-time index on frontage-based cell capacity, Rational-Method combined-sewer load vs existing load + headroom, winter-solstice noon shadow screen; a repair loop removes added floor area that causes violations. | Not traffic assignment, hydraulic sewer modelling or ray-traced shadows. |
 
-*AI-powered urban planning with Graph Neural Networks, Multi-Agent RL, and Physics Simulation*
+Zoning compliance is a **hard bound**: existing FAR ≤ planned FAR ≤ max(zoning max FAR, existing FAR).
 
-[Documentation](https://pimaluos.github.io/docs) • [Demo](#quick-demo) • [Paper](#citing) • [Dashboard](#dashboard)
-
-</div>
-
----
-
-## ✨ Features
-
-| Feature | Description |
-|---------|-------------|
-| 🧠 **Heterogeneous GNN** | 5 edge types for parcel relationships |
-| 🤝 **Multi-Agent RL** | 5 stakeholder agents with consensus voting |
-| ⚡ **Physics Engine** | Traffic, hydrology, solar simulation |
-| 🤖 **LLM-RAG** | Automated zoning constraint extraction |
-| 🗺️ **Interactive Dashboard** | deck.gl + CesiumJS visualization |
-| 🏛️ **Multi-City** | Manhattan support (expandable architecture) |
-
----
-
-## 🚀 Quick Start
-
-### Installation & Demo
+## Install
 
 ```bash
-# Clone
-git clone https://github.com/paryapayami/PIMALUOS.git
-cd PIMALUOS
-
-# Create environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-
-# Install
-pip install -e ".[dev]"
-
-# Run a quick 100-parcel demo
-python demo.py
+python -m venv .venv && source .venv/bin/activate
+pip install torch --index-url https://download.pytorch.org/whl/cpu   # or a CUDA/MPS build
+pip install -e ".[dev]"            # add ",rag" for the LLM-RAG benchmark
+pytest -q                          # unit + end-to-end smoke tests (synthetic city)
 ```
 
-### Start the Dashboard
+`requirements-lock.txt` lists the exact versions the tests were run with.
+
+## Data
+
+Download **MapPLUTO** (shapefile or file geodatabase) from NYC Department of City Planning,
+<https://www.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page>. Record the release
+(e.g. 24v4) in `configs/paper.yaml`. The loader keeps Manhattan lots (`BoroCode == 1`) and reprojects
+to EPSG:2263 (US feet).
+
+For the RAG benchmark you also need the text of the NYC Zoning Resolution (PDF or text) for the
+version matching your MapPLUTO release, and an API key or a local Ollama model.
+
+## Reproduce the manuscript
 
 ```bash
-# Terminal 1: Backend
-uvicorn pimaluos.api.server:app --reload
+# 1. All experiments (seeds, ablations, Nash, voting sensitivity, NSGA-III)
+pimaluos run --config configs/paper.yaml --pluto /path/to/MapPLUTO.zip --out results/paper
 
-# Terminal 2: Frontend
-cd dashboard
-npm install
-npm run dev
+# 2. Optional: RAG extraction benchmark
+pimaluos rag-benchmark --pluto /path/to/MapPLUTO.zip --zr-dir /path/to/zoning_resolution \
+    --provider openai --model gpt-4o --out results/rag
 
-# Open http://localhost:3000
+# 3. Figures, LaTeX tables and every number quoted in the text
+pimaluos report --results results/paper --rag results/rag --out paper/generated
+
+# 4. Compile
+cd paper && latexmk -pdf FINAL_SUBMISSION.tex
 ```
 
----
+Every number in the manuscript is a macro written by step 3. Before step 3 has run, the PDF
+shows **[TBD]** in their place. `results/paper/manifest.json` records the data file, feature
+list, configuration, package versions, hardware and wall-clock time of every stage.
 
-## 💻 Hardware Requirements
+`configs/smoke.yaml` runs the whole pipeline on a small **synthetic** city in seconds. It is
+used by CI, and its numbers are not results.
 
-### Minimum (Demo - 1,000 parcels)
-- **CPU:** 4+ cores (Intel i5/AMD Ryzen 5 or better)
-- **RAM:** 8GB minimum, 16GB recommended
-- **GPU:** Not required (CPU-only)
-- **Storage:** 5GB free space
-- **Time:** ~15 minutes for full pipeline
+## Outputs
 
-### Full Manhattan (42,075 parcels) ✅ Runs on Consumer Laptop
-- **CPU:** Apple M3 Pro, Intel i7, or AMD Ryzen 7 (8+ cores)
-- **RAM:** 16GB minimum (tested on 18GB unified memory)
-- **GPU:** Not required — entire pipeline runs on CPU
-- **Storage:** 5GB free space (results: ~80MB)
-- **Time:** ~2.5 hours end-to-end (64 seconds for optimisation with cached training)
+`results/<run>/`: `manifest.json`, `graph_summary.json`, `gnn.json` (train/validation curves),
+`edge_ablation.json`, `marl.json`, `metrics.csv` (seed × method × verified × metric),
+`nash.json`, `voting_sensitivity.json`, `pareto.json`, `plans/*.npz` (FAR per lot).
 
-### Running the Full-Scale Pipeline
-```bash
-# Activate environment
-source .venv/bin/activate
+## Limitations
 
-# Run full 42K-parcel Manhattan pipeline
-python run_full_manhattan.py
-```
+- The capacity screens are coarse, parameterised planning screens (see `CapacityParams`). Their
+  absolute thresholds are assumptions; results should be read as relative comparisons between plans.
+- Equity indicators are MapPLUTO-only proxies (assessed value per unit, open space per resident).
+  No census data are joined.
+- Only Manhattan is configured. Other cities need a YAML column mapping and recalibrated screens.
 
-**Output** (in `results/full_manhattan/`):
-| File | Description | Size |
-|------|-------------|------|
-| `manhattan_landuse_plan_42k.csv` | Full plan for 42,075 parcels | 14 MB |
-| `manhattan_landuse_plan_42k.geojson` | GeoJSON for GIS/dashboard | 24 MB |
-| `cache/gnn_pretrained.pt` | GNN model weights | — |
-| `cache/gnn_physics.pt` | Physics-trained GNN weights | — |
-| `cache/marl_trainer.pt` | MARL agent weights | — |
-| `cache/manhattan_hetero_graph.pt` | Cached heterogeneous graph | — |
+## Citation
 
-The pipeline uses file-based checkpointing (`stage_*.done`). If interrupted, re-running the script resumes from the last completed stage.
-
-**Note:** No GPU, CUDA, or cloud compute is needed. The full 42,075-parcel Manhattan case study is fully reproducible on a consumer laptop.
-
----
-
-## 🤖 LLM Configuration
-
-PIMALUOS supports three LLM modes for zoning constraint extraction:
-
-### 1. Mock LLM (No API Key Required) ✅
-Perfect for testing and development without costs:
-```python
-from pimaluos.knowledge import get_llm
-llm = get_llm('mock')  # Returns pre-defined constraints
-```
-
-### 2. Local LLM via Ollama (Free, Private) 🔒
-Run models locally without API costs:
-```bash
-# Install Ollama support
-pip install pimaluos[ollama]
-
-# Download and run a model
-ollama pull llama2
-```
-
-```python
-from pimaluos.knowledge import get_llm
-llm = get_llm('ollama', model='llama2')
-```
-
-### 3. Cloud APIs (OpenAI/Anthropic) ☁️
-Requires API keys (costs apply):
-- **OpenAI GPT-4:** ~$0.01-0.03 per zoning query
-- **Anthropic Claude:** ~$0.015-0.075 per query  
-- **Estimated cost for full Manhattan:** $50-150
-
-Set API keys in `.env`:
-```bash
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-```
-
----
-
-## 📖 Usage
-
-```python
-from pimaluos.core import get_data_loader, ParcelGraphBuilder
-from pimaluos.models import ParcelGNN, StakeholderAgent
-from pimaluos.physics import MultiPhysicsEngine
-from pimaluos.knowledge import ConstraintExtractor
-
-# 1. Load city data
-loader = get_data_loader("manhattan")
-gdf, features = loader.load_and_compute_features()
-
-# 2. Build graph
-builder = ParcelGraphBuilder(gdf, features)
-graph = builder.build_heterogeneous_graph()
-
-# 3. Train GNN
-model = ParcelGNN(in_channels=57, hidden_channels=128)  # 57-dim features
-embeddings = model.get_embeddings(graph)
-
-# 4. Extract zoning constraints
-extractor = ConstraintExtractor()
-constraints = extractor.extract_for_zone('R6')
-print(f"Max FAR: {constraints.bulk.max_far}")
-
-# 5. Run physics simulation
-physics = MultiPhysicsEngine(gdf)
-results = physics.simulate_all(scenario)
-```
-
----
-
-## 🏗️ Architecture
-
-```
-pimaluos/
-├── core/           # Data loaders, graph builder
-├── models/         # GNN, MARL agents, Nash solver
-├── knowledge/      # LLM abstraction, RAG pipeline
-├── physics/        # Traffic, hydrology, solar
-├── api/            # FastAPI server
-└── config/         # City-specific settings
-
-dashboard/          # Next.js 14 + deck.gl + Cesium
-```
-
----
-
-## 📊 Dashboard
-
-<div align="center">
-
-| 2D Map View | 3D Digital Twin |
-|:-----------:|:---------------:|
-| deck.gl with parcel selection | CesiumJS globe view |
-
-</div>
-
-**Features:**
-- 🗺️ Interactive parcel selection
-- 🎛️ Real-time agent weight adjustment
-- 📈 Physics metrics dashboard
-- 🔄 WebSocket streaming updates
-- 📤 GeoJSON/PDF export
-
----
-
-## 🧪 Testing
-
-```bash
-# Run all tests
-pytest tests/ -v
-
-# With coverage
-pytest tests/ --cov=pimaluos --cov-report=html
-```
-
----
-
-## 📚 API Reference
-
-| Module | Key Classes |
-|--------|-------------|
-| `pimaluos.core` | `CityDataLoader`, `ParcelGraphBuilder` |
-| `pimaluos.models` | `ParcelGNN`, `StakeholderAgent`, `NashEquilibriumSolver` |
-| `pimaluos.knowledge` | `ConstraintExtractor`, `RAGPipeline`, `get_llm()` |
-| `pimaluos.physics` | `MultiPhysicsEngine`, `TrafficSimulator` |
-
----
-
-## 🔑 Environment Variables
-
-Create `.env` in project root:
-
-```bash
-# LLM API Keys (optional - mock available for testing)
-OPENAI_API_KEY=sk-...
-ANTHROPIC_API_KEY=sk-ant-...
-
-# Dashboard Maps (get free tokens)
-NEXT_PUBLIC_MAPBOX_TOKEN=pk.ey...
-NEXT_PUBLIC_CESIUM_TOKEN=ey...
-```
-
----
-
-## 📖 Citing
-
-```bibtex
-@article{pimaluos2024,
-  title={PIMALUOS: Physics Informed Multi-Agent Land Use Optimization},
-  author={...},
-  journal={Computers, Environment and Urban Systems},
-  year={2026}
-}
-```
-
----
-
-## 📄 License
-
-MIT License - see [LICENSE](LICENSE) for details.
-
----
-
-<div align="center">
-
-**Built with ❤️ for urban planners**
-
-[⬆ Back to top](#-pimaluos)
-
-</div>
+See `CITATION.cff`. License: MIT.

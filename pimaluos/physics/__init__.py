@@ -1,29 +1,7 @@
-"""
-PIMALUOS Physics Module
+"""Planning-scale capacity screens and the verification loop."""
 
-Contains physics-based urban simulation engines and digital twin.
-"""
+from pimaluos.physics.capacity import CapacityModel, CapacityParams, gini
+from pimaluos.physics.verification import contributing_lots, verify_and_repair, violation_counts
 
-from pimaluos.physics.engine import (
-    MultiPhysicsEngine,
-    TrafficSimulator,
-    HydrologySimulator,
-    SolarAccessSimulator,
-    TimeSteppingSimulator,
-)
-from pimaluos.physics.digital_twin import (
-    UrbanDigitalTwin,
-    LODRenderer,
-    DayNightCycle,
-)
-
-__all__ = [
-    "MultiPhysicsEngine",
-    "TrafficSimulator",
-    "HydrologySimulator",
-    "SolarAccessSimulator",
-    "TimeSteppingSimulator",
-    "UrbanDigitalTwin",
-    "LODRenderer",
-    "DayNightCycle",
-]
+__all__ = ["CapacityModel", "CapacityParams", "gini", "contributing_lots",
+           "verify_and_repair", "violation_counts"]

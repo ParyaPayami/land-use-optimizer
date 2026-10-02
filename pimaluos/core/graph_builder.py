@@ -1,524 +1,255 @@
 """
-PIMALUOS Graph Builder Module
+Multi-relational parcel graph construction.
 
-Constructs heterogeneous parcel graphs with multiple edge types for GNN processing.
+All parcels are a single node type; relations differ by edge type. Every edge
+type is made symmetric (both directions stored) and de-duplicated, and the
+summary reports both directed edges and unique undirected relations as counted.
 
-Edge Types:
-    1. Spatial adjacency - Parcels sharing boundaries
-    2. Visual connectivity - Line-of-sight relationships
-    3. Functional similarity - Complementary land uses
-    4. Infrastructure network - Shared infrastructure corridors
-    5. Regulatory coupling - Same zoning district
+Edge types (definitions match the manuscript, Section 3.1):
+
+``spatial_adjacency``
+    Lots whose boundaries touch (within ``adjacency_tol_ft`` to absorb
+    digitising gaps). Weight = shared boundary length / lot perimeter.
+``proximity``
+    k nearest lots (centroid distance) within ``proximity_radius_ft``.
+    Weight = 1 / (1 + d / 100 ft). This is a distance relation, *not* a
+    line-of-sight computation.
+``functional_similarity``
+    Among each lot's k nearest neighbours, those with the identical MapPLUTO
+    land-use code. Weight 1.
+``street_frontage``
+    Lots whose address is on the same street (house number removed, street
+    numbers retained, e.g. "EAST 45 STREET"), linked to their nearest lots on
+    that street within ``street_radius_ft``. Weight 1.
+``regulatory_coupling``
+    k nearest lots within the same zoning district (``ZoneDist1``) within
+    ``regulatory_radius_ft``. Weight 1.
 """
 
+from __future__ import annotations
+
+import logging
+import re
 from typing import Dict, List, Optional, Tuple
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import networkx as nx
+import shapely
 import torch
-from torch_geometric.data import HeteroData
 from scipy.spatial import cKDTree
-from shapely.geometry import LineString, Point
-from shapely.strtree import STRtree
-from tqdm import tqdm
-import gc
+from torch_geometric.data import HeteroData
 
-from pimaluos.config.settings import get_city_config, CityConfig
+logger = logging.getLogger(__name__)
+
+ALL_EDGE_TYPES = [
+    "spatial_adjacency",
+    "proximity",
+    "functional_similarity",
+    "street_frontage",
+    "regulatory_coupling",
+]
+
+RELATION_NAMES = {
+    "spatial_adjacency": ("parcel", "adjacent_to", "parcel"),
+    "proximity": ("parcel", "near", "parcel"),
+    "functional_similarity": ("parcel", "same_use_as", "parcel"),
+    "street_frontage": ("parcel", "same_street_as", "parcel"),
+    "regulatory_coupling": ("parcel", "same_zone_as", "parcel"),
+}
+
+_SUFFIX = {"ST": "STREET", "AVE": "AVENUE", "AV": "AVENUE", "PL": "PLACE", "BLVD": "BOULEVARD",
+           "RD": "ROAD", "DR": "DRIVE", "SQ": "SQUARE", "TER": "TERRACE", "E": "EAST", "W": "WEST"}
+
+
+def parse_street_name(address: str) -> Optional[str]:
+    """Strip the house number from an address and normalise the street name.
+
+    >>> parse_street_name("123 WEST 45 STREET")
+    'WEST 45 STREET'
+    >>> parse_street_name("12-14 E 4TH ST")
+    'EAST 4 STREET'
+    """
+    if not isinstance(address, str) or not address.strip():
+        return None
+    tokens = address.upper().replace(",", " ").split()
+    while tokens and re.fullmatch(r"[\d\-/]+[A-Z]?", tokens[0]):
+        tokens = tokens[1:]
+    if not tokens:
+        return None
+    out = []
+    for t in tokens:
+        t = re.sub(r"^(\d+)(ST|ND|RD|TH)$", r"\1", t)
+        out.append(_SUFFIX.get(t, t))
+    return " ".join(out)
+
+
+def _symmetrise(src: np.ndarray, dst: np.ndarray, w: np.ndarray, n: int) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Return a symmetric, de-duplicated, self-loop-free edge list (max weight kept)."""
+    if len(src) == 0:
+        return src, dst, w
+    s = np.concatenate([src, dst])
+    d = np.concatenate([dst, src])
+    ww = np.concatenate([w, w])
+    keep = s != d
+    s, d, ww = s[keep], d[keep], ww[keep]
+    key = s.astype(np.int64) * n + d
+    order = np.lexsort((-ww, key))
+    key, s, d, ww = key[order], s[order], d[order], ww[order]
+    first = np.ones(len(key), dtype=bool)
+    first[1:] = key[1:] != key[:-1]
+    return s[first], d[first], ww[first]
 
 
 class ParcelGraphBuilder:
-    """
-    Builds heterogeneous parcel graph with configurable edge types.
-    
-    The graph uses PyTorch Geometric's HeteroData format with 'parcel' nodes
-    and multiple relation types connecting them.
-    
-    Attributes:
-        gdf: GeoDataFrame of parcels
-        features: DataFrame of node features
-        config: City configuration with edge type settings
-    """
-    
-    # Default edge types if not specified in config
-    DEFAULT_EDGE_TYPES = [
-        'spatial_adjacency',
-        'visual_connectivity',
-        'functional_similarity',
-        'infrastructure',
-        'regulatory_coupling',
-    ]
-    
-    # Land use synergy matrix for functional similarity edges
-    LANDUSE_SYNERGY = {
-        ('residential', 'commercial'): 0.8,
-        ('residential', 'open_space'): 0.9,
-        ('commercial', 'transportation'): 0.7,
-        ('commercial', 'public'): 0.6,
-        ('residential', 'public'): 0.7,
-        ('industrial', 'transportation'): 0.8,
-        ('commercial', 'commercial'): 0.5,
-        ('residential', 'residential'): 0.4,
-    }
-    
-    # Make synergy matrix symmetric
-    LANDUSE_SYNERGY.update({(b, a): v for (a, b), v in list(LANDUSE_SYNERGY.items())})
-    
+    """Build a PyG ``HeteroData`` graph with one parcel node type and several relations."""
+
     def __init__(
-        self, 
-        gdf: gpd.GeoDataFrame, 
+        self,
+        gdf: gpd.GeoDataFrame,
         features: pd.DataFrame,
-        config: Optional[CityConfig] = None,
-        k_neighbors: int = 10,
         edge_types: Optional[List[str]] = None,
-        memory_efficient: bool = False,
-        adjacency_buffer_ft: float = 15.0,
+        k_neighbors: int = 8,
+        adjacency_tol_ft: float = 1.0,
+        proximity_radius_ft: float = 300.0,
+        street_radius_ft: float = 600.0,
+        regulatory_radius_ft: float = 1000.0,
+        street_k: int = 2,
+        regulatory_k: int = 5,
     ):
-        """
-        Initialize graph builder.
-        
-        Args:
-            gdf: GeoDataFrame with parcel geometries
-            features: DataFrame with node features (same index as gdf)
-            config: Optional city configuration
-            k_neighbors: Number of neighbors for k-NN based edge types
-            edge_types: Optional list of edge types to build
-            memory_efficient: If True, process edges in batches to reduce peak RAM
-            adjacency_buffer_ft: Buffer distance (feet) for adjacency detection
-        """
         self.gdf = gdf.reset_index(drop=True)
         self.features = features.reset_index(drop=True)
-        self.config = config
-        self.k_neighbors = k_neighbors
-        self.memory_efficient = memory_efficient
-        self.adjacency_buffer_ft = adjacency_buffer_ft
-        self.edge_types = edge_types or (
-            config.edge_types if config else self.DEFAULT_EDGE_TYPES
-        )
-        
-        # Compute centroids for distance calculations
-        self.centroids = np.array([
-            [geom.centroid.x, geom.centroid.y] 
-            for geom in self.gdf.geometry
-        ])
-        
-        # Build KD-tree for efficient neighbor queries
-        self.kdtree = cKDTree(self.centroids)
-        
-        # Build STRtree for fast spatial adjacency queries (O(N log N))
-        self._strtree = None  # Lazily built
-        
-        # Store edge data
-        self.edges: Dict[str, Tuple[torch.Tensor, torch.Tensor]] = {}
-    
-    def _get_strtree(self) -> STRtree:
-        """Lazily build and cache the Shapely STRtree for O(N log N) spatial queries."""
-        if self._strtree is None:
-            print("  Building STRtree spatial index...")
-            self._strtree = STRtree(self.gdf.geometry.values)
-        return self._strtree
+        self.edge_types = list(edge_types or ALL_EDGE_TYPES)
+        unknown = set(self.edge_types) - set(ALL_EDGE_TYPES)
+        if unknown:
+            raise ValueError(f"Unknown edge types: {unknown}")
+        self.k = k_neighbors
+        self.adjacency_tol_ft = adjacency_tol_ft
+        self.proximity_radius_ft = proximity_radius_ft
+        self.street_radius_ft = street_radius_ft
+        self.regulatory_radius_ft = regulatory_radius_ft
+        self.street_k = street_k
+        self.regulatory_k = regulatory_k
+        self.n = len(self.gdf)
+        self.xy = self.gdf[["x", "y"]].values if "x" in self.gdf else np.column_stack(
+            [self.gdf.geometry.centroid.x, self.gdf.geometry.centroid.y])
+        self.tree = cKDTree(self.xy)
+        self.edges: Dict[str, Tuple[np.ndarray, np.ndarray, np.ndarray]] = {}
 
-    def build_spatial_adjacency_edges(
-        self, batch_size: int = 2000
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Build edges between parcels that share a boundary.
+    # ------------------------------------------------------------------ builders
+    def _knn(self, k: int):
+        k_eff = min(k + 1, self.n)
+        d, idx = self.tree.query(self.xy, k=k_eff)
+        if k_eff == 1:
+            d, idx = d[:, None], idx[:, None]
+        return d[:, 1:], idx[:, 1:]
 
-        Uses a Shapely STRtree for O(N log N) candidate retrieval instead of
-        the naive O(N²) scan, making this viable for 40K+ parcels.
-        Edge weight is proportional to shared boundary length.
-
-        Args:
-            batch_size: Process parcels in batches to cap peak memory.
-
-        Returns:
-            Tuple of (edge_index, edge_weight) tensors
-        """
-        print("Building spatial adjacency edges (STRtree-accelerated)...")
-        buf = self.adjacency_buffer_ft
-        strtree = self._get_strtree()
+    def build_spatial_adjacency(self):
         geoms = self.gdf.geometry.values
-        n = len(geoms)
+        buffered = shapely.buffer(geoms, self.adjacency_tol_ft)
+        tree = shapely.STRtree(geoms)
+        src, dst = tree.query(buffered, predicate="intersects")
+        keep = src != dst
+        src, dst = src[keep], dst[keep]
+        if len(src) == 0:
+            return src, dst, np.zeros(0)
+        shared = shapely.length(shapely.intersection(shapely.boundary(geoms[src]), buffered[dst]))
+        perim = shapely.length(geoms[src])
+        w = np.clip(shared / np.maximum(perim, 1e-9), 0, 1)
+        keep = shared > 0
+        return src[keep], dst[keep], w[keep]
 
-        edge_src, edge_dst, edge_wt = [], [], []
+    def build_proximity(self):
+        d, idx = self._knn(self.k)
+        rows = np.repeat(np.arange(self.n), idx.shape[1])
+        d, idx = d.ravel(), idx.ravel()
+        keep = np.isfinite(d) & (d <= self.proximity_radius_ft)
+        return rows[keep], idx[keep], 1.0 / (1.0 + d[keep] / 100.0)
 
-        for batch_start in tqdm(
-            range(0, n, batch_size), desc="Adjacency batches"
-        ):
-            batch_end = min(batch_start + batch_size, n)
-            for idx in range(batch_start, batch_end):
-                parcel = geoms[idx]
-                buffered = parcel.buffer(buf)
+    def build_functional_similarity(self):
+        _, idx = self._knn(self.k)
+        lu = self.gdf["land_use"].astype(str).values
+        rows = np.repeat(np.arange(self.n), idx.shape[1])
+        cols = idx.ravel()
+        keep = lu[rows] == lu[cols]
+        return rows[keep], cols[keep], np.ones(keep.sum())
 
-                # STRtree returns candidate indices in O(log N)
-                candidates = strtree.query(buffered)
+    def build_street_frontage(self):
+        streets = self.gdf["address"].map(parse_street_name)
+        valid = streets.notna().values
+        labels = np.where(valid, streets.fillna("").values, None)
+        idx = np.where(valid)[0]
+        s, d, w = self._group_knn_subset(idx, labels[valid], self.street_k, self.street_radius_ft)
+        return s, d, w
 
-                for neighbor_idx in candidates:
-                    if neighbor_idx == idx:
-                        continue
-                    neighbor = geoms[neighbor_idx]
-                    try:
-                        intersection = parcel.intersection(neighbor)
-                        shared_len = getattr(intersection, "length", 0.0)
-                    except Exception:
-                        shared_len = 0.0
+    def _group_knn_subset(self, idx, labels, k, radius):
+        if len(idx) == 0:
+            return np.zeros(0, int), np.zeros(0, int), np.zeros(0)
+        saved = self.xy
+        src, dst = [], []
+        for _, members in pd.Series(idx).groupby(labels):
+            m = members.values
+            if len(m) < 2:
+                continue
+            kk = min(k + 1, len(m))
+            dd, ii = cKDTree(saved[m]).query(saved[m], k=kk)
+            dd, ii = dd[:, 1:], ii[:, 1:]
+            r = np.repeat(m, ii.shape[1])
+            c = m[ii.ravel()]
+            keep = dd.ravel() <= radius
+            src.append(r[keep])
+            dst.append(c[keep])
+        if not src:
+            return np.zeros(0, int), np.zeros(0, int), np.zeros(0)
+        s, d = np.concatenate(src), np.concatenate(dst)
+        return s, d, np.ones(len(s))
 
-                    if shared_len > 0:
-                        weight = shared_len / (parcel.length + 1e-10)
-                        edge_src.append(idx)
-                        edge_dst.append(neighbor_idx)
-                        edge_wt.append(weight)
+    def build_regulatory_coupling(self):
+        zones = self.gdf["zone_district"].astype(str).values
+        valid = zones != "UNKNOWN"
+        idx = np.where(valid)[0]
+        return self._group_knn_subset(idx, zones[valid], self.regulatory_k, self.regulatory_radius_ft)
 
-            # Free memory between batches in memory-efficient mode
-            if self.memory_efficient:
-                gc.collect()
-
-        if len(edge_src) == 0:
-            empty = torch.zeros((2, 0), dtype=torch.long)
-            return empty, torch.zeros(0, dtype=torch.float)
-
-        edge_index = torch.tensor(
-            [edge_src, edge_dst], dtype=torch.long
-        ).contiguous()
-        edge_weight = torch.tensor(edge_wt, dtype=torch.float)
-
-        print(f"  Created {edge_index.shape[1]} adjacency edges")
-        return edge_index, edge_weight
-    
-    def build_visual_connectivity_edges(
-        self, 
-        distance_threshold: float = 500.0
-    ) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Build edges based on visual/spatial proximity.
-        
-        Uses k-nearest neighbors within distance threshold.
-        Edge weight is inverse of distance.
-        
-        Args:
-            distance_threshold: Maximum distance in coordinate units
-            
-        Returns:
-            Tuple of (edge_index, edge_weight) tensors
-        """
-        print("Building visual connectivity edges...")
-        
-        edge_index = []
-        edge_weight = []
-        
-        # Find k-nearest neighbors for each parcel
-        distances, indices = self.kdtree.query(
-            self.centroids, 
-            k=self.k_neighbors + 1  # +1 because includes self
-        )
-        
-        for i in range(len(self.gdf)):
-            for j, dist in zip(indices[i][1:], distances[i][1:]):  # Skip self
-                if dist < distance_threshold:
-                    # Weight by inverse distance
-                    weight = 1.0 / (1.0 + dist)
-                    edge_index.append([i, j])
-                    edge_weight.append(weight)
-        
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
-        edge_weight = torch.tensor(edge_weight, dtype=torch.float)
-        
-        print(f"Created {edge_index.shape[1] if len(edge_index) > 0 else 0} visual connectivity edges")
-        return edge_index, edge_weight
-    
-    def build_functional_similarity_edges(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Build edges between parcels with complementary/synergistic land uses.
-        
-        Uses predefined synergy matrix to weight connections.
-        
-        Returns:
-            Tuple of (edge_index, edge_weight) tensors
-        """
-        print("Building functional similarity edges...")
-        
-        # Map land use codes to categories
-        landuse_map = {
-            '01': 'residential', '02': 'residential', '03': 'residential',
-            '04': 'residential', '05': 'commercial', '06': 'industrial',
-            '07': 'transportation', '08': 'public', '09': 'open_space',
-            '10': 'parking', '11': 'vacant'
+    # ------------------------------------------------------------------ assembly
+    def build(self) -> HeteroData:
+        builders = {
+            "spatial_adjacency": self.build_spatial_adjacency,
+            "proximity": self.build_proximity,
+            "functional_similarity": self.build_functional_similarity,
+            "street_frontage": self.build_street_frontage,
+            "regulatory_coupling": self.build_regulatory_coupling,
         }
-        
-        # Get land use category for each parcel
-        landuse_col = 'land_use' if 'land_use' in self.gdf.columns else 'LandUse'
-        landuse = [
-            landuse_map.get(str(lu), 'other') 
-            for lu in self.gdf[landuse_col].fillna('11')
-        ]
-        
-        edge_index = []
-        edge_weight = []
-        
-        # Use k-nearest for computational efficiency
-        distances, indices = self.kdtree.query(
-            self.centroids, 
-            k=self.k_neighbors + 1
-        )
-        
-        for i in range(len(self.gdf)):
-            lu_i = landuse[i]
-            
-            for j in indices[i][1:]:  # Skip self
-                lu_j = landuse[j]
-                
-                # Check if synergy exists
-                synergy = self.LANDUSE_SYNERGY.get((lu_i, lu_j), 0.0)
-                
-                if synergy > 0:
-                    edge_index.append([i, j])
-                    edge_weight.append(synergy)
-        
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
-        edge_weight = torch.tensor(edge_weight, dtype=torch.float)
-        
-        print(f"Created {edge_index.shape[1] if len(edge_index) > 0 else 0} functional similarity edges")
-        return edge_index, edge_weight
-    
-    def build_infrastructure_edges(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Build edges between parcels sharing infrastructure corridors.
-        
-        Connects parcels along the same street/avenue.
-        
-        Returns:
-            Tuple of (edge_index, edge_weight) tensors
-        """
-        print("Building infrastructure network edges...")
-        
-        # Extract street name from address
-        addr_col = 'address' if 'address' in self.gdf.columns else 'Address'
-        
-        streets = []
-        for addr in self.gdf[addr_col]:
-            if pd.notna(addr):
-                # Extract major street/avenue
-                parts = str(addr).split()
-                street = ' '.join([p for p in parts if any(c.isalpha() for c in p)])
-                streets.append(street)
-            else:
-                streets.append('unknown')
-        
-        edge_index = []
-        edge_weight = []
-        
-        # Group by street
-        street_series = pd.Series(streets)
-        street_groups = street_series.groupby(street_series).groups
-        
-        for street, parcel_indices in street_groups.items():
-            if street != 'unknown' and len(parcel_indices) > 1:
-                indices_list = list(parcel_indices)
-                
-                # Connect parcels on same street (limit to nearby)
-                for i in range(len(indices_list)):
-                    for j in range(i + 1, min(i + 5, len(indices_list))):
-                        edge_index.append([indices_list[i], indices_list[j]])
-                        edge_index.append([indices_list[j], indices_list[i]])  # Bidirectional
-                        edge_weight.extend([0.5, 0.5])
-        
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
-        edge_weight = torch.tensor(edge_weight, dtype=torch.float)
-        
-        print(f"Created {edge_index.shape[1] if len(edge_index) > 0 else 0} infrastructure edges")
-        return edge_index, edge_weight
-    
-    def build_regulatory_coupling_edges(self) -> Tuple[torch.Tensor, torch.Tensor]:
-        """
-        Build edges between parcels in the same zoning district.
-        
-        For large zones, uses spatial proximity to limit connections.
-        
-        Returns:
-            Tuple of (edge_index, edge_weight) tensors
-        """
-        print("Building regulatory coupling edges...")
-        
-        zone_col = 'zone_district' if 'zone_district' in self.gdf.columns else 'ZoneDist1'
-        zones = self.gdf[zone_col].fillna('unknown')
-        
-        edge_index = []
-        edge_weight = []
-        
-        # Group by zoning district
-        zone_groups = zones.groupby(zones).groups
-        
-        for zone, parcel_indices in zone_groups.items():
-            if zone != 'unknown' and len(parcel_indices) > 1:
-                indices_list = list(parcel_indices)
-                
-                # For large zones, use spatial proximity
-                if len(indices_list) > 100:
-                    zone_centroids = self.centroids[indices_list]
-                    zone_tree = cKDTree(zone_centroids)
-                    
-                    for i, global_idx in enumerate(indices_list):
-                        # Find 5 nearest in same zone
-                        dists, local_indices = zone_tree.query(
-                            [zone_centroids[i]], k=6
-                        )
-                        
-                        for local_j in local_indices[0][1:]:  # Skip self
-                            neighbor_idx = indices_list[local_j]
-                            edge_index.append([global_idx, neighbor_idx])
-                            edge_weight.append(1.0)
-                else:
-                    # Fully connect small zones
-                    for i in range(len(indices_list)):
-                        for j in range(i + 1, len(indices_list)):
-                            edge_index.append([indices_list[i], indices_list[j]])
-                            edge_index.append([indices_list[j], indices_list[i]])
-                            edge_weight.extend([1.0, 1.0])
-        
-        edge_index = torch.tensor(edge_index, dtype=torch.long).t().contiguous()
-        edge_weight = torch.tensor(edge_weight, dtype=torch.float)
-        
-        print(f"Created {edge_index.shape[1] if len(edge_index) > 0 else 0} regulatory coupling edges")
-        return edge_index, edge_weight
-    
-    def build_heterogeneous_graph(self) -> HeteroData:
-        """
-        Construct PyTorch Geometric HeteroData object with all edge types.
-        
-        Returns:
-            HeteroData graph with parcel nodes and multiple edge types
-        """
-        print("\n" + "=" * 60)
-        print("BUILDING HETEROGENEOUS PARCEL GRAPH")
-        print("=" * 60)
-        
-        # Build requested edge types
-        edge_builders = {
-            'spatial_adjacency': self.build_spatial_adjacency_edges,
-            'visual_connectivity': self.build_visual_connectivity_edges,
-            'functional_similarity': self.build_functional_similarity_edges,
-            'infrastructure': self.build_infrastructure_edges,
-            'regulatory_coupling': self.build_regulatory_coupling_edges,
-        }
-        
-        # Edge type names for graph
-        edge_type_names = {
-            'spatial_adjacency': ('parcel', 'adjacent_to', 'parcel'),
-            'visual_connectivity': ('parcel', 'visible_from', 'parcel'),
-            'functional_similarity': ('parcel', 'synergizes_with', 'parcel'),
-            'infrastructure': ('parcel', 'shares_infrastructure', 'parcel'),
-            'regulatory_coupling': ('parcel', 'same_zone_as', 'parcel'),
-        }
-        
-        # Create HeteroData
         data = HeteroData()
-        
-        # Node features - ensure all columns are numeric
-        features_numeric = self.features.copy()
-        
-        # Convert each column to numeric, reporting any issues
-        for col in features_numeric.columns:
-            if features_numeric[col].dtype == 'object':
-                # Try to convert to numeric
-                features_numeric[col] = pd.to_numeric(features_numeric[col], errors='coerce')
-                # Fill NaNs with 0
-                features_numeric[col] = features_numeric[col].fillna(0)
-        
-        # Final safety: convert entire DataFrame to float
-        features_numeric = features_numeric.astype(float)
-        
-        x = torch.tensor(features_numeric.values, dtype=torch.float)
-        data['parcel'].x = x
-        data['parcel'].num_nodes = len(self.features)
-        
-        # Build and add each edge type
-        total_edges = 0
-        for edge_type in self.edge_types:
-            if edge_type in edge_builders:
-                edge_index, edge_weight = edge_builders[edge_type]()
-                
-                if edge_index.numel() > 0:
-                    edge_name = edge_type_names[edge_type]
-                    data[edge_name].edge_index = edge_index
-                    data[edge_name].edge_weight = edge_weight
-                    
-                    self.edges[edge_type] = (edge_index, edge_weight)
-                    total_edges += edge_index.shape[1]
-        
-        print("\n" + "=" * 60)
-        print("GRAPH CONSTRUCTION COMPLETE")
-        print(f"Nodes: {data['parcel'].num_nodes}")
-        print(f"Edge types: {len(data.edge_types)}")
-        print(f"Total edges: {total_edges}")
-        print("=" * 60)
-        
+        data["parcel"].x = torch.tensor(self.features.values, dtype=torch.float32)
+        data["parcel"].num_nodes = self.n
+        for et in self.edge_types:
+            s, d, w = builders[et]()
+            s, d, w = _symmetrise(np.asarray(s, dtype=np.int64), np.asarray(d, dtype=np.int64),
+                                  np.asarray(w, dtype=np.float64), self.n)
+            self.edges[et] = (s, d, w)
+            rel = RELATION_NAMES[et]
+            data[rel].edge_index = torch.tensor(np.vstack([s, d]), dtype=torch.long)
+            data[rel].edge_attr = torch.tensor(w, dtype=torch.float32).unsqueeze(-1)
+            logger.info("%s: %d directed edges", et, len(s))
         return data
-    
-    def to_networkx(self) -> nx.DiGraph:
-        """
-        Convert graph to NetworkX for visualization and analysis.
-        
-        Returns:
-            NetworkX DiGraph with node and edge attributes
-        """
-        G = nx.DiGraph()
-        
-        # Add nodes
-        for i in range(len(self.gdf)):
-            G.add_node(
-                i,
-                pos=(self.centroids[i][0], self.centroids[i][1]),
-                **{col: self.features.iloc[i][col] for col in self.features.columns[:10]}
-            )
-        
-        # Add edges from all types
-        for edge_type, (edge_index, edge_weight) in self.edges.items():
-            for j in range(edge_index.shape[1]):
-                src, dst = edge_index[:, j].tolist()
-                G.add_edge(
-                    src, dst,
-                    edge_type=edge_type,
-                    weight=edge_weight[j].item()
-                )
-        
-        return G
-    
-    def compute_network_metrics(self) -> pd.DataFrame:
-        """
-        Compute network centrality metrics for each node.
-        
-        Returns:
-            DataFrame with centrality metrics
-        """
-        G = self.to_networkx()
-        
-        metrics = pd.DataFrame(index=range(len(self.gdf)))
-        
-        # Compute centralities
-        metrics['degree_centrality'] = pd.Series(nx.degree_centrality(G))
-        metrics['betweenness_centrality'] = pd.Series(nx.betweenness_centrality(G, k=min(100, len(G))))
-        metrics['closeness_centrality'] = pd.Series(nx.closeness_centrality(G))
-        metrics['clustering_coefficient'] = pd.Series(nx.clustering(G))
-        
-        return metrics
 
+    # Backwards-compatible name.
+    build_heterogeneous_graph = build
 
-# Example usage
-if __name__ == "__main__":
-    from pimaluos.core.data_loader import get_data_loader
-    
-    # Load Manhattan data
-    loader = get_data_loader('manhattan')
-    gdf, features = loader.load_data()
-    
-    # Build graph
-    builder = ParcelGraphBuilder(gdf, features)
-    hetero_data = builder.build_heterogeneous_graph()
-    
-    print("\nHeteroData Structure:")
-    print(hetero_data)
-    
-    # Save graph
-    torch.save(hetero_data, 'data/manhattan/manhattan_hetero_graph.pt')
-    print("\nGraph saved to data/manhattan/manhattan_hetero_graph.pt")
+    def summary(self) -> Dict:
+        """Exact counts of directed edges and unique undirected relations per type."""
+        out = {"n_nodes": int(self.n), "edge_types": {}}
+        total_dir = 0
+        total_und = 0
+        for et, (s, d, _) in self.edges.items():
+            und = int(np.unique(np.minimum(s, d) * self.n + np.maximum(s, d)).size)
+            out["edge_types"][et] = {"directed": int(len(s)), "undirected": und}
+            total_dir += len(s)
+            total_und += und
+        out["total_directed"] = int(total_dir)
+        out["total_undirected"] = int(total_und)
+        deg = np.zeros(self.n)
+        for s, _, _ in self.edges.values():
+            np.add.at(deg, s, 1)
+        out["isolated_nodes"] = int((deg == 0).sum())
+        return out

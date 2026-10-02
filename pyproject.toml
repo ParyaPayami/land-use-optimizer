@@ -1,91 +1,67 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
+requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "pimaluos"
-version = "0.1.0"
-description = "Physics Informed Multi-Agent Land Use Optimization Software"
+version = "0.2.0"
+description = "Multi-agent FAR optimisation on parcel graphs with planning-scale capacity screens"
 readme = "README.md"
 license = {text = "MIT"}
 requires-python = ">=3.10"
-authors = [
-    {name = "PIMALUOS Team", email = "pimaluos@example.com"}
-]
-keywords = [
-    "urban-planning",
-    "gnn",
-    "graph-neural-network",
-    "multi-agent",
-    "reinforcement-learning",
-    "land-use-optimization",
-    "digital-twin",
-    "physics-informed",
-]
+authors = [{name = "Parya Payami", email = "ppayami@uwm.edu"}]
+keywords = ["urban planning", "land use", "zoning", "graph neural networks",
+            "multi-agent reinforcement learning", "NSGA-III", "MapPLUTO"]
 classifiers = [
-    "Development Status :: 3 - Alpha",
+    "Development Status :: 4 - Beta",
     "Intended Audience :: Science/Research",
-    "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Topic :: Scientific/Engineering :: GIS",
-    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "numpy>=1.24",
+    "pandas>=2.0",
+    "geopandas>=0.14",
+    "shapely>=2.0",
+    "pyproj>=3.5",
+    "pyarrow>=12",
+    "scipy>=1.10",
+    "torch>=2.1",
+    "torch-geometric>=2.4",
+    "pymoo>=0.6.1",
+    "pydantic>=2.0",
+    "pyyaml>=6.0",
+    "matplotlib>=3.7",
 ]
 
-[project.urls]
-Homepage = "https://github.com/ParyaPayami/land-use-optimizer"
-Documentation = "https://paryapayami.github.io/land-use-optimizer/"
-Repository = "https://github.com/ParyaPayami/land-use-optimizer"
-Issues = "https://github.com/ParyaPayami/land-use-optimizer/issues"
+[project.optional-dependencies]
+rag = ["openai>=1.0", "anthropic>=0.30", "ollama>=0.2", "pypdf>=4.0", "faiss-cpu>=1.7.4",
+       "sentence-transformers>=2.2"]
+dev = ["pytest>=7.4", "pytest-cov>=4.1", "ruff>=0.5"]
 
 [project.scripts]
 pimaluos = "pimaluos.cli:main"
-pimaluos-server = "pimaluos.api.server:run_server"
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.4.0",
-    "pytest-cov>=4.1.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "isort>=5.12.0",
-    "flake8>=6.1.0",
-    "mypy>=1.5.0",
-]
-docs = [
-    "mkdocs>=1.5.0",
-    "mkdocs-material>=9.4.0",
-    "mkdocstrings[python]>=0.23.0",
-]
+[project.urls]
+Repository = "https://github.com/ParyaPayami/land-use-optimizer"
+Issues = "https://github.com/ParyaPayami/land-use-optimizer/issues"
 
 [tool.setuptools.packages.find]
-exclude = ["tests*", "dashboard*", "docs*"]
+include = ["pimaluos*"]
 
 [tool.setuptools.package-data]
 pimaluos = ["config/cities/*.yaml"]
 
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-include = '\.pyi?$'
+[tool.ruff]
+line-length = 120
+target-version = "py310"
 
-[tool.isort]
-profile = "black"
-line_length = 100
-skip = [".git", "__pycache__", "build", "dist"]
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-ignore_missing_imports = true
+[tool.ruff.lint]
+select = ["E", "F", "W"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-python_files = "test_*.py"
-python_functions = "test_*"
-addopts = "-v --cov=pimaluos --cov-report=term-missing"
+filterwarnings = ["ignore::DeprecationWarning", "ignore::FutureWarning", "ignore::UserWarning"]

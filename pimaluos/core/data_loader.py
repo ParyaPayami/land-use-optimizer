@@ -1,646 +1,424 @@
 """
-PIMALUOS Data Loader Module
+PIMALUOS data loading and feature engineering.
 
-Provides abstract base class and city-specific implementations for loading
-parcel data from various open data sources.
+Two loaders are provided:
 
-Supported cities:
-- Manhattan, NYC (MapPLUTO)
-- Chicago, IL (Cook County Assessor)
-- Los Angeles, CA (LA County)
-- Boston, MA (Boston GIS)
+* :class:`ManhattanDataLoader` / :class:`ParcelFileLoader` read a local MapPLUTO
+  (or any parcel layer described by a city YAML ``column_mapping``) and build a
+  standardised parcel table plus a numeric node-feature matrix.
+* :class:`SyntheticCityLoader` generates a small synthetic city with the same
+  schema. It exists **only** for unit tests and CI smoke runs; no result in the
+  manuscript is produced from it.
+
+All geometry is reprojected to the city's projected CRS (EPSG:2263, US feet, for
+Manhattan) so areas and distances are in feet.
 """
 
-from abc import ABC, abstractmethod
+from __future__ import annotations
+
+import logging
+from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
-import warnings
+from typing import Dict, List, Optional, Union
 
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import requests
-from io import BytesIO
-from zipfile import ZipFile
-from sklearn.preprocessing import StandardScaler
+from scipy.spatial import cKDTree
+from shapely.geometry import box
 
-from pimaluos.config.settings import get_city_config, CityConfig
+from pimaluos.config.settings import CityConfig, get_city_config
 
-warnings.filterwarnings('ignore')
+logger = logging.getLogger(__name__)
+
+# MapPLUTO LandUse codes (two-digit strings).
+LAND_USE_LABELS: Dict[str, str] = {
+    "01": "one_two_family",
+    "02": "multi_family_walkup",
+    "03": "multi_family_elevator",
+    "04": "mixed_residential_commercial",
+    "05": "commercial_office",
+    "06": "industrial_manufacturing",
+    "07": "transportation_utility",
+    "08": "public_facilities_institutions",
+    "09": "open_space_recreation",
+    "10": "parking",
+    "11": "vacant_land",
+}
+
+# Coarse land-use class used by the capacity models.
+LAND_USE_CLASS: Dict[str, str] = {
+    "01": "residential", "02": "residential", "03": "residential",
+    "04": "mixed", "05": "commercial", "06": "industrial",
+    "07": "utility", "08": "public", "09": "open_space",
+    "10": "parking", "11": "vacant",
+}
+
+RESIDENTIAL_CODES = {"01", "02", "03", "04"}
+OPEN_SPACE_CODE = "09"
+
+NUMERIC_COLUMNS = [
+    "lot_area_sqft", "bldg_area_sqft", "num_floors", "year_built", "year_altered",
+    "built_far", "max_resid_far", "max_comm_far", "max_facil_far",
+    "assessed_total", "assessed_land", "units_res", "units_total",
+    "lot_front", "lot_depth", "bldg_front", "bldg_depth",
+    "res_area", "com_area", "office_area", "retail_area", "garage_area",
+    "storage_area", "factory_area",
+]
+
+# Heavy-tailed raw features that are log1p-transformed before standardisation.
+LOG_FEATURES = {
+    "lot_area_sqft", "bldg_area_sqft", "assessed_total", "assessed_land",
+    "assessed_building", "units_res", "units_total", "res_area", "com_area",
+    "office_area", "retail_area", "garage_area", "storage_area", "factory_area",
+    "value_per_lot_sqft", "dist_to_open_space_ft", "dist_to_center_ft",
+    "perimeter_ft",
+}
 
 
-class CityDataLoader(ABC):
+@dataclass
+class ParcelDataset:
+    """Standardised parcels plus node features.
+
+    Attributes:
+        gdf: Parcel GeoDataFrame in projected CRS with standard columns.
+        features_raw: Engineered features before transformation.
+        features: Transformed (log1p where appropriate) and z-scored features.
+        feature_names: Column names of ``features`` (the GNN input order).
+        meta: Provenance information written to the run manifest.
     """
-    Abstract base class for city-specific parcel data loaders.
-    
-    Subclasses must implement:
-        - download_parcels(): Download raw parcel data
-        - download_zoning(): Download zoning district data
-        - get_column_mapping(): Map source columns to standard schema
+
+    gdf: gpd.GeoDataFrame
+    features_raw: pd.DataFrame
+    features: pd.DataFrame
+    feature_names: List[str]
+    meta: Dict = field(default_factory=dict)
+
+
+def _normalise_land_use(series: pd.Series) -> pd.Series:
+    """Return MapPLUTO land-use codes as two-digit strings ('01'..'11')."""
+
+    def conv(v):
+        if pd.isna(v):
+            return "11"
+        try:
+            return f"{int(float(v)):02d}"
+        except (TypeError, ValueError):
+            s = str(v).strip()
+            return s.zfill(2) if s else "11"
+
+    return series.map(conv)
+
+
+def _flag(series: Optional[pd.Series], n: int) -> np.ndarray:
+    """Convert a presence-type column (string or numeric) to 0/1."""
+    if series is None:
+        return np.zeros(n, dtype=float)
+    if series.dtype == object:
+        s = series.fillna("").astype(str).str.strip().str.upper()
+        return (~s.isin(["", "N", "0", "NAN", "NONE"])).astype(float).values
+    return (pd.to_numeric(series, errors="coerce").fillna(0) > 0).astype(float).values
+
+
+def standardise_parcels(
+    gdf: gpd.GeoDataFrame, column_mapping: Dict[str, str], target_crs: str
+) -> gpd.GeoDataFrame:
+    """Rename columns, coerce types and derive regulatory maxima.
+
+    ``max_far`` is the **maximum** of the residential, commercial and community
+    facility FAR limits. These are alternative caps for different uses, so they
+    must not be summed.
     """
-    
-    # Standard column schema that all city loaders must map to
-    STANDARD_COLUMNS = {
-        'parcel_id': 'Unique parcel identifier',
-        'address': 'Street address',
-        'lot_area_sqft': 'Lot area in square feet',
-        'bldg_area_sqft': 'Building area in square feet',
-        'num_floors': 'Number of floors',
-        'year_built': 'Year built',
-        'land_use': 'Land use category code',
-        'zone_district': 'Zoning district',
-        'built_far': 'Current floor area ratio',
-        'max_far': 'Maximum allowed FAR',
-        'assessed_total': 'Total assessed value',
-        'assessed_land': 'Land assessed value',
-        'units_residential': 'Number of residential units',
-        'units_total': 'Total units',
-    }
-    
-    def __init__(self, city: str, data_dir: Optional[Path] = None, cache: bool = True):
-        """
-        Initialize data loader.
-        
-        Args:
-            city: City identifier (e.g., 'manhattan', 'chicago')
-            data_dir: Base data directory (default: ./data/{city})
-            cache: Whether to cache downloaded data
-        """
+    gdf = gdf.rename(columns={k: v for k, v in column_mapping.items() if k in gdf.columns})
+    if gdf.crs is None:
+        raise ValueError("Parcel layer has no CRS; cannot compute areas in feet.")
+    gdf = gdf.to_crs(target_crs)
+    gdf = gdf[gdf.geometry.notna() & ~gdf.geometry.is_empty].copy()
+    gdf["geometry"] = gdf.geometry.make_valid() if hasattr(gdf.geometry, "make_valid") else gdf.geometry.buffer(0)
+
+    for col in NUMERIC_COLUMNS:
+        if col in gdf.columns:
+            gdf[col] = pd.to_numeric(gdf[col], errors="coerce")
+        else:
+            gdf[col] = np.nan
+
+    # Lot area: prefer the assessor value, fall back to polygon area.
+    poly_area = gdf.geometry.area
+    gdf["lot_area_sqft"] = gdf["lot_area_sqft"].where(gdf["lot_area_sqft"] > 0, poly_area)
+    gdf["bldg_area_sqft"] = gdf["bldg_area_sqft"].fillna(0).clip(lower=0)
+    gdf["num_floors"] = gdf["num_floors"].fillna(0).clip(lower=0)
+    gdf["built_far"] = gdf["built_far"].where(
+        gdf["built_far"].notna(), gdf["bldg_area_sqft"] / gdf["lot_area_sqft"]
+    ).fillna(0)
+
+    for c in ["max_resid_far", "max_comm_far", "max_facil_far"]:
+        gdf[c] = gdf[c].fillna(0).clip(lower=0)
+    gdf["max_far"] = gdf[["max_resid_far", "max_comm_far", "max_facil_far"]].max(axis=1)
+
+    gdf["land_use"] = _normalise_land_use(gdf["land_use"] if "land_use" in gdf else pd.Series(np.nan, index=gdf.index))
+    gdf["land_use_class"] = gdf["land_use"].map(LAND_USE_CLASS).fillna("vacant")
+    gdf["zone_district"] = gdf.get("zone_district", pd.Series("UNKNOWN", index=gdf.index)).fillna("UNKNOWN").astype(str)
+    gdf["address"] = gdf.get("address", pd.Series("", index=gdf.index)).fillna("").astype(str)
+
+    centroids = gdf.geometry.centroid
+    gdf["x"] = centroids.x
+    gdf["y"] = centroids.y
+    return gdf.reset_index(drop=True)
+
+
+def compute_node_features(
+    gdf: gpd.GeoDataFrame, center_xy: Optional[np.ndarray] = None
+) -> pd.DataFrame:
+    """Engineer node features from the standardised parcel table.
+
+    Every feature is computed from columns present in MapPLUTO (or derived from
+    geometry). Features that are constant over the study area are dropped later
+    in :func:`transform_features`, so the final feature count is data-dependent
+    and is recorded in the run manifest.
+    """
+    n = len(gdf)
+    f = pd.DataFrame(index=gdf.index)
+
+    # --- Geometry
+    f["lot_area_sqft"] = gdf["lot_area_sqft"].fillna(0)
+    f["perimeter_ft"] = gdf.geometry.length
+    area = gdf.geometry.area.replace(0, np.nan)
+    f["shape_index"] = (gdf.geometry.length ** 2 / (4 * np.pi * area)).fillna(1.0).clip(upper=50)
+    for c in ["lot_front", "lot_depth", "bldg_front", "bldg_depth"]:
+        f[c] = gdf[c].fillna(0)
+    f["irregular_lot"] = _flag(gdf.get("irregular_lot"), n)
+
+    # --- Built environment
+    f["bldg_area_sqft"] = gdf["bldg_area_sqft"]
+    f["num_floors"] = gdf["num_floors"]
+    f["built_far"] = gdf["built_far"]
+    floors = gdf["num_floors"].replace(0, np.nan)
+    f["lot_coverage"] = (gdf["bldg_area_sqft"] / floors / gdf["lot_area_sqft"]).fillna(0).clip(0, 1)
+    year_built = gdf["year_built"].where(gdf["year_built"] > 1600)
+    f["year_built"] = year_built.fillna(year_built.median() if year_built.notna().any() else 1950)
+    altered = gdf["year_altered"].where(gdf["year_altered"] > 1600)
+    f["years_since_alteration"] = (2025 - altered.fillna(f["year_built"])).clip(lower=0)
+    for c in ["units_res", "units_total", "res_area", "com_area", "office_area",
+              "retail_area", "garage_area", "storage_area", "factory_area"]:
+        f[c] = gdf[c].fillna(0).clip(lower=0)
+
+    # --- Regulation
+    for c in ["max_resid_far", "max_comm_far", "max_facil_far", "max_far"]:
+        f[c] = gdf[c]
+    f["far_utilisation"] = (gdf["built_far"] / gdf["max_far"].replace(0, np.nan)).fillna(0).clip(0, 5)
+    f["historic_district"] = _flag(gdf.get("historic_district"), n)
+    f["landmark"] = _flag(gdf.get("landmark"), n)
+    f["special_district"] = _flag(gdf.get("special_district"), n)
+    f["split_zone"] = _flag(gdf.get("split_zone"), n)
+    f["flood_zone"] = np.maximum(_flag(gdf.get("flood_2015"), n), _flag(gdf.get("flood_2007"), n))
+
+    # --- Economics
+    f["assessed_total"] = gdf["assessed_total"].fillna(0).clip(lower=0)
+    f["assessed_land"] = gdf["assessed_land"].fillna(0).clip(lower=0)
+    f["assessed_building"] = (f["assessed_total"] - f["assessed_land"]).clip(lower=0)
+    f["value_per_lot_sqft"] = f["assessed_total"] / gdf["lot_area_sqft"].replace(0, np.nan)
+    f["value_per_lot_sqft"] = f["value_per_lot_sqft"].fillna(0)
+
+    # --- Location
+    xy = gdf[["x", "y"]].values
+    open_mask = (gdf["land_use"] == OPEN_SPACE_CODE).values
+    if open_mask.any():
+        d, _ = cKDTree(xy[open_mask]).query(xy, k=1)
+        f["dist_to_open_space_ft"] = d
+    else:
+        f["dist_to_open_space_ft"] = 0.0
+    if center_xy is not None:
+        f["dist_to_center_ft"] = np.hypot(xy[:, 0] - center_xy[0], xy[:, 1] - center_xy[1])
+
+    # --- Current land use (one-hot over the 11 MapPLUTO codes)
+    for code in LAND_USE_LABELS:
+        f[f"lu_{code}"] = (gdf["land_use"] == code).astype(float)
+
+    return f.astype(float)
+
+
+def transform_features(features_raw: pd.DataFrame) -> pd.DataFrame:
+    """log1p heavy-tailed features, drop constant columns, z-score the rest."""
+    f = features_raw.copy()
+    for c in f.columns:
+        if c in LOG_FEATURES:
+            f[c] = np.log1p(f[c].clip(lower=0))
+    std = f.std(ddof=0)
+    keep = std[std > 1e-9].index
+    dropped = sorted(set(f.columns) - set(keep))
+    if dropped:
+        logger.info("Dropping %d constant features: %s", len(dropped), dropped)
+    f = f[keep]
+    f = (f - f.mean()) / f.std(ddof=0)
+    return f.fillna(0.0)
+
+
+def _read_layer(path: Union[str, Path]) -> gpd.GeoDataFrame:
+    path = Path(path)
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Parcel file not found: {path}. Download MapPLUTO from NYC DCP and pass --pluto PATH."
+        )
+    if path.suffix.lower() == ".zip":
+        return gpd.read_file(f"zip://{path}")
+    if path.suffix.lower() == ".parquet":
+        return gpd.read_parquet(path)
+    return gpd.read_file(path)
+
+
+class ParcelFileLoader:
+    """Load a local parcel layer using a city YAML column mapping."""
+
+    def __init__(self, city: str, parcel_path: Union[str, Path], cache_dir: Optional[Path] = None):
         self.city = city
-        self.config = get_city_config(city)
-        self.data_dir = Path(data_dir) if data_dir else Path(f'./data/{city}')
-        self.data_dir.mkdir(parents=True, exist_ok=True)
-        self.cache = cache
-        
-        # Data containers
-        self.parcels_gdf: Optional[gpd.GeoDataFrame] = None
-        self.zoning_gdf: Optional[gpd.GeoDataFrame] = None
-        self.features: Optional[pd.DataFrame] = None
-        self.features_normalized: Optional[pd.DataFrame] = None
-    
-    @abstractmethod
-    def download_parcels(self) -> gpd.GeoDataFrame:
-        """Download and return parcel data."""
-        pass
-    
-    @abstractmethod
-    def download_zoning(self) -> gpd.GeoDataFrame:
-        """Download and return zoning district data."""
-        pass
-    
-    @abstractmethod
-    def get_column_mapping(self) -> Dict[str, str]:
-        """
-        Return mapping from source columns to standard schema.
-        
-        Returns:
-            Dict mapping source column names to STANDARD_COLUMNS keys
-        """
-        pass
-    
-    def standardize_columns(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-        """Apply column mapping to standardize schema."""
-        mapping = self.get_column_mapping()
-        return gdf.rename(columns=mapping)
-    
-    def compute_node_features(self, gdf: gpd.GeoDataFrame) -> pd.DataFrame:
-        """
-        Compute 57-dimensional feature vector for each parcel.
-        
-        This method implements the standard feature engineering pipeline
-        that can be used across all cities.
-        
-        Args:
-            gdf: Standardized parcel GeoDataFrame
-            
-        Returns:
-            DataFrame with computed features
-        """
-        print("Computing node features...")
-        features = pd.DataFrame(index=gdf.index)
-        
-        # ===== PHYSICAL ATTRIBUTES (8 features) =====
-        features['area_sqft'] = gdf.geometry.area
-        features['perimeter'] = gdf.geometry.length
-        features['shape_complexity'] = (
-            (gdf.geometry.length ** 2) / (4 * np.pi * gdf.geometry.area + 1e-10)
-        )
-        
-        features['built_floor_area'] = gdf['bldg_area_sqft'].fillna(0)
-        features['num_floors'] = gdf['num_floors'].fillna(0)
-        features['year_built'] = gdf['year_built'].fillna(gdf['year_built'].median())
-        features['year_altered'] = gdf.get('year_altered', gdf['year_built'])
-        features['bldg_class_encoded'] = pd.Categorical(
-            gdf.get('bldg_class', 'UNKNOWN')
-        ).codes
-        
-        # ===== CURRENT LAND USE (6 features) =====
-        features['current_far'] = gdf['built_far'].fillna(0)
-        features['max_far'] = gdf['max_far'].fillna(0)
-        features['lot_coverage'] = (
-            gdf['bldg_area_sqft'].fillna(0) / gdf['lot_area_sqft'].replace(0, 1)
-        ).clip(0, 1)
-        
-        # Land use category encoding
-        features['landuse_encoded'] = pd.Categorical(gdf['land_use']).codes
-        features['zone_encoded'] = pd.Categorical(gdf['zone_district']).codes
-        
-        # Land use one-hot encoding
-        landuse_dummies = pd.get_dummies(gdf['land_use'], prefix='lu')
-        
-        # ===== ACCESSIBILITY METRICS (8 features) =====
-        centroid = gdf.geometry.centroid
-        city_center_lat = self.config.latitude
-        city_center_lon = self.config.longitude
-        
-        features['dist_to_center'] = np.sqrt(
-            (centroid.y - city_center_lat)**2 + 
-            (centroid.x - city_center_lon)**2
-        ) * 111000  # Convert degrees to meters
-        
-        # Placeholders for network metrics (computed after graph building)
-        features['dist_to_subway'] = 0
-        features['dist_to_bus'] = 0
-        features['dist_to_park'] = 0
-        features['betweenness_centrality'] = 0
-        features['closeness_centrality'] = 0
-        features['degree_centrality'] = 0
-        features['clustering_coefficient'] = 0
-        
-        # ===== ENVIRONMENTAL INDICATORS (5 features) =====
-        features['tree_canopy_pct'] = 0  # Placeholder
-        features['impervious_pct'] = (features['lot_coverage'] * 100).clip(0, 100)
-        # Handle flood_zone - could be scalar or Series  
-        flood_zone = gdf.get('flood_zone', pd.Series([0] * len(gdf)))
-        if isinstance(flood_zone, (int, float)):
-            features['flood_zone'] = flood_zone
+        self.config: CityConfig = get_city_config(city)
+        self.parcel_path = Path(parcel_path)
+        self.cache_dir = Path(cache_dir) if cache_dir else None
+
+    def _filter_study_area(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+        boro = getattr(self.config, "borough_code", None)
+        if boro is None:
+            return gdf
+        for col in ["BoroCode", "borocode"]:
+            if col in gdf.columns:
+                return gdf[pd.to_numeric(gdf[col], errors="coerce") == int(boro)]
+        if "Borough" in gdf.columns:
+            return gdf[gdf["Borough"].astype(str).str.upper().isin(["MN", "MANHATTAN"])]
+        return gdf
+
+    def load(self) -> ParcelDataset:
+        cache = self.cache_dir / f"{self.city}_parcels.parquet" if self.cache_dir else None
+        if cache is not None and cache.exists():
+            gdf = gpd.read_parquet(cache)
+            n_raw = gdf.attrs.get("n_raw", len(gdf))
         else:
-            features['flood_zone'] = flood_zone.fillna(0).astype(int)
-        
-        # Distance to boundary
-        boundary = gdf.unary_union.boundary
-        features['dist_to_water'] = centroid.distance(boundary)
-        features['elevation'] = gdf.get('elevation', 10.0)
-        
-        # ===== SOCIOECONOMIC CONTEXT (7 features) =====
-        features['assessed_total'] = gdf['assessed_total'].fillna(0)
-        features['assessed_land'] = gdf['assessed_land'].fillna(0)
-        features['assessed_building'] = (
-            gdf['assessed_total'].fillna(0) - gdf['assessed_land'].fillna(0)
-        )
-        features['exemption_value'] = gdf.get('exemption_value', 0).fillna(0)
-        
-        # Census placeholders
-        features['median_income'] = 75000
-        features['population_density'] = 1000
-        features['pct_rental'] = 0.5
-        
-        #  ===== REGULATORY CONSTRAINTS (5 features) =====
-        # Handle historic_district - may be string or numeric
-        hd = gdf.get('historic_district', pd.Series([0] * len(gdf)))
-        if hasattr(hd, 'dtype') and hd.dtype == 'object':
-            features['historic_district'] = hd.notna().astype(int)  # 1 if exists, 0 otherwise
-        else:
-            features['historic_district'] = pd.to_numeric(hd, errors='coerce').fillna(0).astype(int)
-        
-        # Handle landmark similarly
-        lm = gdf.get('landmark', pd.Series([0] * len(gdf)))
-        if hasattr(lm, 'dtype') and lm.dtype == 'object':
-            features['landmark'] = lm.notna().astype(int)
-        else:
-            features['landmark'] = pd.to_numeric(lm, errors='coerce').fillna(0).astype(int)
-        
-        # Handle special_district
-        sd = gdf.get('special_district', pd.Series([0] * len(gdf)))
-        if hasattr(sd, 'dtype') and sd.dtype == 'object':
-            features['special_district'] = sd.notna().astype(int)
-        else:
-            features['special_district'] = pd.to_numeric(sd, errors='coerce').fillna(0).astype(int)
-        features['max_height_ft'] = gdf['num_floors'].fillna(10) * 12
-        features['setback_required'] = gdf['zone_district'].str.contains('R', na=False).astype(int)
-        
-        # ===== DERIVED FEATURES (8 features) =====
-        features['age'] = 2024 - features['year_built']
-        features['years_since_renovation'] = 2024 - features['year_altered']
-        features['far_utilization'] = (
-            features['current_far'] / features['max_far'].replace(0, 1)
-        ).clip(0, 1)
-        features['development_potential'] = (
-            features['max_far'] - features['current_far']
-        ).clip(0)
-        
-        features['value_per_sqft'] = (
-            features['assessed_total'] / features['area_sqft'].replace(0, 1)
-        ).replace([np.inf, -np.inf], 0)
-        
-        units_res = gdf['units_residential'].fillna(0)
-        units_total = gdf['units_total'].fillna(0)
-        
-        features['units_per_acre'] = units_res / features['area_sqft'] * 43560
-        features['jobs_density'] = (units_total - units_res) / features['area_sqft'] * 43560
-        features['land_use_mix'] = (
-            (gdf.get('comm_far', 0) > 0) & (gdf.get('resid_far', 0) > 0)
-        ).astype(int)
-        
-        # Merge land use dummies
-        features = pd.concat([features, landuse_dummies], axis=1)
-        
-        print(f"Generated {len(features.columns)} features for {len(features)} parcels")
-        return features
-    
-    def normalize_features(self) -> pd.DataFrame:
-        """Apply Z-score normalization to features."""
-        if self.features is None:
-            raise ValueError("Features not computed. Call compute_node_features first.")
-        
-        scaler = StandardScaler()
-        self.features_normalized = pd.DataFrame(
-            scaler.fit_transform(self.features),
-            columns=self.features.columns,
-            index=self.features.index
-        )
-        
-        print(f"Normalized features: mean={self.features_normalized.mean().mean():.4f}, "
-              f"std={self.features_normalized.std().mean():.4f}")
-        return self.features_normalized
-    
-    def load_data(self) -> Tuple[gpd.GeoDataFrame, pd.DataFrame]:
-        """
-        Main loading pipeline.
-        
-        Returns:
-            Tuple of (parcels_gdf, features_df)
-        """
-        print("=" * 60)
-        print(f"{self.config.display_name.upper()} PARCEL DATA LOADER")
-        print("=" * 60)
-        
-        # Load parcels
-        self.parcels_gdf = self.download_parcels()
-        self.parcels_gdf = self.standardize_columns(self.parcels_gdf)
-        print(f"Loaded {len(self.parcels_gdf)} parcels")
-        
-        # Load zoning
-        self.zoning_gdf = self.download_zoning()
-        print(f"Loaded {len(self.zoning_gdf)} zoning districts")
-        
-        # Compute features
-        self.features = self.compute_node_features(self.parcels_gdf)
-        
-        # Normalize
-        self.normalize_features()
-        
-        print("=" * 60)
-        print("DATA LOADING COMPLETE")
-        print("=" * 60)
-        
-        return self.parcels_gdf, self.features_normalized
-    
-    def load_and_compute_features(self) -> Tuple[gpd.GeoDataFrame, pd.DataFrame]:
-        """
-        Alias for load_data() for API consistency.
-        
-        Returns:
-            Tuple of (parcels_gdf, features_df)
-        """
-        return self.load_data()
+            raw = _read_layer(self.parcel_path)
+            raw = self._filter_study_area(raw)
+            n_raw = len(raw)
+            gdf = standardise_parcels(raw, getattr(self.config, "column_mapping", {}), self.config.crs)
+            if cache is not None:
+                cache.parent.mkdir(parents=True, exist_ok=True)
+                gdf.to_parquet(cache)
 
-
-
-class ManhattanDataLoader(CityDataLoader):
-    """
-    Data loader for Manhattan, NYC using MapPLUTO dataset.
-    
-    Data source: NYC Open Data
-    - MapPLUTO: https://data.cityofnewyork.us/City-Government/Primary-Land-Use-Tax-Lot-Output-PLUTO-/64uk-42ks
-    - Zoning: https://data.cityofnewyork.us/City-Government/Zoning-Districts/7823-25i9
-    """
-    
-    PLUTO_URL = "https://data.cityofnewyork.us/api/geospatial/64uk-42ks?method=export&format=Shapefile"
-    ZONING_URL = "https://data.cityofnewyork.us/api/geospatial/7823-25i9?method=export&format=Shapefile"
-    
-    def __init__(self, data_dir: Optional[Path] = None, cache: bool = True):
-        super().__init__('manhattan', data_dir, cache)
-    
-    def get_column_mapping(self) -> Dict[str, str]:
-        """Map MapPLUTO columns to standard schema."""
-        return {
-            'BBL': 'parcel_id',
-            'Address': 'address',
-            'LotArea': 'lot_area_sqft',
-            'BldgArea': 'bldg_area_sqft',
-            'NumFloors': 'num_floors',
-            'YearBuilt': 'year_built',
-            'YearAlter1': 'year_altered',
-            'LandUse': 'land_use',
-            'ZoneDist1': 'zone_district',
-            'BuiltFAR': 'built_far',
-            'ResidFAR': 'resid_far',
-            'CommFAR': 'comm_far',
-            'FacilFAR': 'facil_far',
-            'AssessTot': 'assessed_total',
-            'AssessLand': 'assessed_land',
-            'UnitsRes': 'units_residential',
-            'UnitsTotal': 'units_total',
-            'BldgClass': 'bldg_class',
-            'HistDist': 'historic_district',
-            'Landmark': 'landmark',
-            'SplitZone': 'special_district',
-            'ExemptTot': 'exemption_value',
+        n_before = len(gdf)
+        gdf = gdf[(gdf["lot_area_sqft"] > 0)].reset_index(drop=True)
+        center_xy = None
+        if self.config.center_lon is not None:
+            pt = gpd.GeoSeries(
+                gpd.points_from_xy([self.config.center_lon], [self.config.center_lat]), crs="EPSG:4326"
+            ).to_crs(self.config.crs)
+            center_xy = np.array([pt.x.iloc[0], pt.y.iloc[0]])
+        raw_f = compute_node_features(gdf, center_xy)
+        feats = transform_features(raw_f)
+        meta = {
+            "city": self.city,
+            "source_file": str(self.parcel_path),
+            "n_parcels_in_study_area": int(n_raw),
+            "n_parcels_used": int(len(gdf)),
+            "n_dropped_zero_area": int(n_before - len(gdf)),
+            "n_features_engineered": int(raw_f.shape[1]),
+            "n_features_used": int(feats.shape[1]),
+            "features_used": list(feats.columns),
+            "crs": self.config.crs,
+            "synthetic": False,
         }
-    
-    def download_parcels(self) -> gpd.GeoDataFrame:
-        """Download MapPLUTO data for Manhattan."""
-        cache_file = self.data_dir / 'pluto_manhattan.geojson'
-        
-        if self.cache and cache_file.exists():
-            print("Loading cached MapPLUTO data...")
-            return gpd.read_file(cache_file)
-        
-        # Check if raw shapefile exists
-        raw_shp = self.data_dir / 'pluto_raw' / 'MapPLUTO.shp'
-        if raw_shp.exists():
-            print(f"Loading existing MapPLUTO shapefile from {raw_shp}...")
-            gdf = gpd.read_file(raw_shp)
-            
-            # Filter to Manhattan (BoroCode == 1 or '1')
-            manhattan = gdf[(gdf['BoroCode'] == '1') | (gdf['BoroCode'] == 1)].copy()
-            
-            # Compute max_far before standardization
-            manhattan['max_far'] = (
-                manhattan['ResidFAR'].fillna(0) + 
-                manhattan['CommFAR'].fillna(0) + 
-                manhattan['FacilFAR'].fillna(0)
-            )
-            
-            # Save cache
-            manhattan.to_file(cache_file, driver='GeoJSON')
-            print(f"Saved {len(manhattan)} Manhattan parcels to cache")
-            
-            return manhattan
-        
-        print("Downloading MapPLUTO data from NYC Open Data...")
-        response = requests.get(self.PLUTO_URL, stream=True, timeout=120)
-        
-        with ZipFile(BytesIO(response.content)) as z:
-            z.extractall(self.data_dir / 'pluto_raw')
-        
-        shp_file = list((self.data_dir / 'pluto_raw').glob('*.shp'))[0]
-        gdf = gpd.read_file(shp_file)
-        
-        # Filter to Manhattan (BoroCode == 1)
-        manhattan = gdf[gdf['BoroCode'] == '1'].copy()
-        
-        # Compute max_far before standardization
-        manhattan['max_far'] = (
-            manhattan['ResidFAR'].fillna(0) + 
-            manhattan['CommFAR'].fillna(0) + 
-            manhattan['FacilFAR'].fillna(0)
-        )
-        
-        # Save cache
-        manhattan.to_file(cache_file, driver='GeoJSON')
-        print(f"Saved {len(manhattan)} Manhattan parcels to cache")
-        
-        return manhattan
-    
-    def download_zoning(self) -> gpd.GeoDataFrame:
-        """Download zoning district data."""
-        cache_file = self.data_dir / 'zoning_manhattan.geojson'
-        
-        if self.cache and cache_file.exists():
-            print("Loading cached zoning data...")
-            return gpd.read_file(cache_file)
-        
-        # Check if raw zoning shapefiles exist
-        zoning_dir = self.data_dir / 'zoning_raw' / 'nycgiszoningfeatures_202511shp'
-        if zoning_dir.exists():
-            zoning_shps = list(zoning_dir.glob('nyzd.shp'))  # Zoning districts
-            if zoning_shps:
-                print(f"Loading existing zoning shapefile from {zoning_shps[0]}...")
-                zoning = gpd.read_file(zoning_shps[0])
-                
-                # Filter to Manhattan bounds
-                if self.parcels_gdf is not None:
-                    bounds = self.parcels_gdf.total_bounds
-                    zoning = zoning.cx[bounds[0]:bounds[2], bounds[1]:bounds[3]]
-                
-                zoning.to_file(cache_file, driver='GeoJSON')
-                print(f"Saved {len(zoning)} zoning districts to cache")
-                return zoning
-        
-        print("Downloading zoning data...")
-        response = requests.get(self.ZONING_URL, stream=True, timeout=120)
-        
-        with ZipFile(BytesIO(response.content)) as z:
-            z.extractall(self.data_dir / 'zoning_raw')
-        
-        shp_file = list((self.data_dir / 'zoning_raw').glob('*.shp'))[0]
-        zoning = gpd.read_file(shp_file)
-        
-        # Filter to Manhattan bounds
-        if self.parcels_gdf is not None:
-            bounds = self.parcels_gdf.total_bounds
-            zoning = zoning.cx[bounds[0]:bounds[2], bounds[1]:bounds[3]]
-        
-        zoning.to_file(cache_file, driver='GeoJSON')
-        return zoning
+        return ParcelDataset(gdf, raw_f, feats, list(feats.columns), meta)
 
 
-class ChicagoDataLoader(CityDataLoader):
+class ManhattanDataLoader(ParcelFileLoader):
+    """MapPLUTO loader restricted to Manhattan (BoroCode 1)."""
+
+    def __init__(self, parcel_path: Union[str, Path], cache_dir: Optional[Path] = None):
+        super().__init__("manhattan", parcel_path, cache_dir)
+
+
+class SyntheticCityLoader:
+    """Synthetic grid city with MapPLUTO-like attributes.
+
+    **For tests and CI smoke runs only.** Blocks of rectangular lots separated by
+    streets; land use, zoning and floor area are drawn from simple distributions.
     """
-    Data loader for Chicago, IL using Cook County Assessor data.
-    
-    Data source: Cook County Data Portal
-    """
-    
-    def __init__(self, data_dir: Optional[Path] = None, cache: bool = True):
-        super().__init__('chicago', data_dir, cache)
-    
-    def get_column_mapping(self) -> Dict[str, str]:
-        """Map Chicago columns to standard schema."""
-        return {
-            'PIN': 'parcel_id',
-            'property_address': 'address',
-            'land_area': 'lot_area_sqft',
-            'building_area': 'bldg_area_sqft',
-            'stories': 'num_floors',
-            'year_built': 'year_built',
-            'class': 'land_use',
-            'zoning': 'zone_district',
-            'far': 'built_far',
-            'max_far': 'max_far',
-            'assessed_value': 'assessed_total',
-            'land_value': 'assessed_land',
-            'residential_units': 'units_residential',
-            'total_units': 'units_total',
+
+    def __init__(self, n_blocks_x: int = 6, n_blocks_y: int = 8, lots_per_block: int = 8, seed: int = 0):
+        self.nx, self.ny, self.lpb, self.seed = n_blocks_x, n_blocks_y, lots_per_block, seed
+
+    def load(self) -> ParcelDataset:
+        rng = np.random.default_rng(self.seed)
+        block_w, block_h, street = 800.0, 200.0, 60.0
+        lot_w = block_w / (self.lpb // 2)
+        rows = []
+        avenues = ["FIRST AVENUE", "SECOND AVENUE", "THIRD AVENUE", "LEXINGTON AVENUE",
+                   "PARK AVENUE", "MADISON AVENUE", "FIFTH AVENUE", "SIXTH AVENUE"]
+        zones = ["R6", "R7A", "R8", "C1-9", "C4-5", "C6-4", "M1-5"]
+        zone_far = {"R6": (2.43, 0, 4.8), "R7A": (4.0, 0, 4.0), "R8": (6.02, 0, 6.5),
+                    "C1-9": (10.0, 2.0, 10.0), "C4-5": (3.4, 3.4, 3.4),
+                    "C6-4": (10.0, 10.0, 10.0), "M1-5": (0, 5.0, 6.5)}
+        for bx in range(self.nx):
+            for by in range(self.ny):
+                zone = zones[(bx + 2 * by) % len(zones)] if rng.random() > 0.2 else zones[rng.integers(len(zones))]
+                x0 = bx * (block_w + street)
+                y0 = by * (block_h + street)
+                street_no = 10 + by
+                for k in range(self.lpb):
+                    side = k // (self.lpb // 2)
+                    i = k % (self.lpb // 2)
+                    geom = box(x0 + i * lot_w, y0 + side * block_h / 2,
+                               x0 + (i + 1) * lot_w, y0 + (side + 1) * block_h / 2)
+                    lot_area = geom.area
+                    if zone.startswith("M"):
+                        lu = rng.choice(["06", "05", "10", "11"], p=[0.5, 0.2, 0.2, 0.1])
+                    elif zone.startswith("C"):
+                        lu = rng.choice(["05", "04", "03", "08", "09"], p=[0.45, 0.3, 0.15, 0.05, 0.05])
+                    else:
+                        lu = rng.choice(["01", "02", "03", "04", "08", "09", "11"],
+                                        p=[0.05, 0.3, 0.35, 0.15, 0.05, 0.05, 0.05])
+                    rf, cf, ff = zone_far[zone]
+                    mx = max(rf, cf, ff)
+                    built = 0.0 if lu in {"09", "11", "10"} else float(np.clip(rng.gamma(2.0, mx / 3.0), 0.2, 1.4 * mx))
+                    floors = 0 if built == 0 else int(np.clip(round(built / rng.uniform(0.5, 0.9)), 1, 60))
+                    bldg = built * lot_area
+                    units = int(bldg / 900) if lu in RESIDENTIAL_CODES else 0
+                    ass_land = lot_area * rng.uniform(80, 400) * (1.5 if zone.startswith("C") else 1.0)
+                    ass_tot = ass_land + bldg * rng.uniform(50, 250)
+                    addr_no = 100 + 20 * i
+                    address = (f"{addr_no} EAST {street_no} STREET" if side == 0
+                               else f"{addr_no} {avenues[bx % len(avenues)]}")
+                    rows.append(dict(
+                        geometry=geom, BBL=1_000_000_000 + len(rows), Address=address,
+                        LotArea=lot_area, BldgArea=bldg, NumFloors=floors,
+                        YearBuilt=int(rng.integers(1890, 2020)), YearAlter1=0,
+                        LandUse=lu, ZoneDist1=zone, SPDist1=None, SplitZone="N",
+                        BuiltFAR=built, ResidFAR=rf, CommFAR=cf, FacilFAR=ff,
+                        AssessTot=ass_tot, AssessLand=ass_land,
+                        UnitsRes=units, UnitsTotal=units + (1 if lu in {"05", "06"} else 0),
+                        BldgClass="D4", HistDist=None, Landmark=None,
+                        LotFront=lot_w, LotDepth=block_h / 2, BldgFront=lot_w * 0.9, BldgDepth=block_h * 0.4,
+                        IrrLotCode="N", ResArea=bldg if lu in RESIDENTIAL_CODES else 0,
+                        ComArea=bldg if lu == "05" else 0, OfficeArea=0, RetailArea=0,
+                        GarageArea=0, StrgeArea=0, FactryArea=bldg if lu == "06" else 0,
+                        PFIRM15_FL=1 if (bx == 0 and rng.random() < 0.5) else 0, FIRM07_FLA=0,
+                    ))
+        raw = gpd.GeoDataFrame(rows, crs="EPSG:2263")
+        cfg = get_city_config("manhattan")
+        gdf = standardise_parcels(raw, cfg.column_mapping, "EPSG:2263")
+        center = np.array([gdf["x"].mean(), gdf["y"].mean()])
+        raw_f = compute_node_features(gdf, center)
+        feats = transform_features(raw_f)
+        meta = {
+            "city": "synthetic", "source_file": None, "n_parcels_in_study_area": len(gdf),
+            "n_parcels_used": len(gdf), "n_dropped_zero_area": 0,
+            "n_features_engineered": int(raw_f.shape[1]), "n_features_used": int(feats.shape[1]),
+            "features_used": list(feats.columns), "crs": "EPSG:2263", "synthetic": True,
         }
-    
-    def download_parcels(self) -> gpd.GeoDataFrame:
-        """Download Chicago parcel data."""
-        cache_file = self.data_dir / 'parcels_chicago.geojson'
-        
-        if self.cache and cache_file.exists():
-            print("Loading cached Chicago parcel data...")
-            return gpd.read_file(cache_file)
-        
-        # TODO: Implement Chicago data download
-        # For now, return empty GeoDataFrame with expected schema
-        print("WARNING: Chicago data loader not fully implemented. Using placeholder.")
-        return gpd.GeoDataFrame(columns=list(self.get_column_mapping().keys()))
-    
-    def download_zoning(self) -> gpd.GeoDataFrame:
-        """Download Chicago zoning data."""
-        cache_file = self.data_dir / 'zoning_chicago.geojson'
-        
-        if self.cache and cache_file.exists():
-            return gpd.read_file(cache_file)
-        
-        # TODO: Implement Chicago zoning download
-        return gpd.GeoDataFrame()
+        return ParcelDataset(gdf, raw_f, feats, list(feats.columns), meta)
 
 
-class LADataLoader(CityDataLoader):
-    """
-    Data loader for Los Angeles, CA using LA County Open Data.
-    
-    Data source: LA County GIS Data Portal
-    """
-    
-    def __init__(self, data_dir: Optional[Path] = None, cache: bool = True):
-        super().__init__('la', data_dir, cache)
-    
-    def get_column_mapping(self) -> Dict[str, str]:
-        """Map LA columns to standard schema."""
-        return {
-            'APN': 'parcel_id',
-            'SitusAddress': 'address',
-            'LandArea': 'lot_area_sqft',
-            'BuildingArea': 'bldg_area_sqft',
-            'Stories': 'num_floors',
-            'YearBuilt': 'year_built',
-            'UseCode': 'land_use',
-            'Zoning': 'zone_district',
-            'FAR': 'built_far',
-            'MaxFAR': 'max_far',
-            'AssessedValue': 'assessed_total',
-            'LandValue': 'assessed_land',
-            'ResUnits': 'units_residential',
-            'TotalUnits': 'units_total',
-        }
-    
-    def download_parcels(self) -> gpd.GeoDataFrame:
-        """Download LA parcel data."""
-        cache_file = self.data_dir / 'parcels_la.geojson'
-        
-        if self.cache and cache_file.exists():
-            print("Loading cached LA parcel data...")
-            return gpd.read_file(cache_file)
-        
-        # TODO: Implement LA data download
-        print("WARNING: LA data loader not fully implemented. Using placeholder.")
-        return gpd.GeoDataFrame(columns=list(self.get_column_mapping().keys()))
-    
-    def download_zoning(self) -> gpd.GeoDataFrame:
-        """Download LA zoning data."""
-        cache_file = self.data_dir / 'zoning_la.geojson'
-        
-        if self.cache and cache_file.exists():
-            return gpd.read_file(cache_file)
-        
-        # TODO: Implement LA zoning download
-        return gpd.GeoDataFrame()
-
-
-class BostonDataLoader(CityDataLoader):
-    """
-    Data loader for Boston, MA using Boston GIS Open Data.
-    
-    Data source: Boston GIS / Analyze Boston
-    """
-    
-    def __init__(self, data_dir: Optional[Path] = None, cache: bool = True):
-        super().__init__('boston', data_dir, cache)
-    
-    def get_column_mapping(self) -> Dict[str, str]:
-        """Map Boston columns to standard schema."""
-        return {
-            'parcel_num': 'parcel_id',
-            'st_name': 'address',
-            'lot_size': 'lot_area_sqft',
-            'gross_area': 'bldg_area_sqft',
-            'num_floors': 'num_floors',
-            'yr_built': 'year_built',
-            'lu': 'land_use',
-            'zoning': 'zone_district',
-            'far': 'built_far',
-            'max_far': 'max_far',
-            'av_total': 'assessed_total',
-            'av_land': 'assessed_land',
-            'res_units': 'units_residential',
-            'total_units': 'units_total',
-        }
-    
-    def download_parcels(self) -> gpd.GeoDataFrame:
-        """Download Boston parcel data."""
-        cache_file = self.data_dir / 'parcels_boston.geojson'
-        
-        if self.cache and cache_file.exists():
-            print("Loading cached Boston parcel data...")
-            return gpd.read_file(cache_file)
-        
-        # TODO: Implement Boston data download
-        print("WARNING: Boston data loader not fully implemented. Using placeholder.")
-        return gpd.GeoDataFrame(columns=list(self.get_column_mapping().keys()))
-    
-    def download_zoning(self) -> gpd.GeoDataFrame:
-        """Download Boston zoning data."""
-        cache_file = self.data_dir / 'zoning_boston.geojson'
-        
-        if self.cache and cache_file.exists():
-            return gpd.read_file(cache_file)
-        
-        # TODO: Implement Boston zoning download
-        return gpd.GeoDataFrame()
-
-
-def get_data_loader(city: str, **kwargs) -> CityDataLoader:
-    """
-    Factory function to get the appropriate data loader for a city.
-    
-    Args:
-        city: City identifier ('manhattan', 'chicago', 'la', 'boston')
-        **kwargs: Additional arguments passed to loader constructor
-        
-    Returns:
-        CityDataLoader instance for the requested city
-        
-    Raises:
-        ValueError: If city is not supported
-    """
-    loaders = {
-        'manhattan': ManhattanDataLoader,
-        'chicago': ChicagoDataLoader,
-        'la': LADataLoader,
-        'boston': BostonDataLoader,
-    }
-    
-    if city not in loaders:
-        raise ValueError(
-            f"Unsupported city: {city}. Available: {list(loaders.keys())}"
-        )
-    
-    return loaders[city](**kwargs)
-
-
-# Example usage
-if __name__ == "__main__":
-    # Load Manhattan data
-    loader = get_data_loader('manhattan')
-    gdf, features = loader.load_data()
-    
-    print("\nFeature Summary:")
-    print(features.describe())
-    
-    print("\nSample parcels:")
-    print(gdf[['address', 'zone_district', 'land_use', 'bldg_area_sqft', 'num_floors']].head(10))
+def get_data_loader(city: str, parcel_path: Optional[Union[str, Path]] = None, **kwargs):
+    """Factory: ``'synthetic'`` or any city with a YAML config plus a parcel file."""
+    if city == "synthetic":
+        return SyntheticCityLoader(**kwargs)
+    if parcel_path is None:
+        raise ValueError(f"A local parcel file is required for city '{city}' (use --pluto PATH).")
+    if city == "manhattan":
+        return ManhattanDataLoader(parcel_path, **kwargs)
+    return ParcelFileLoader(city, parcel_path, **kwargs)

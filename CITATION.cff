@@ -1,0 +1,11 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+title: "PIMALUOS: multi-agent floor-area optimisation on parcel graphs with planning-scale capacity screens"
+version: 0.2.0
+license: MIT
+repository-code: "https://github.com/ParyaPayami/land-use-optimizer"
+authors:
+  - family-names: Payami
+    given-names: Parya
+    affiliation: "School of Architecture and Urban Planning, University of Wisconsin-Milwaukee"
+    email: ppayami@uwm.edu

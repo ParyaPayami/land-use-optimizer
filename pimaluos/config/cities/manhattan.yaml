@@ -1,106 +1,66 @@
-# Manhattan, NYC Configuration
-# Data source: NYC Open Data (data.cityofnewyork.us)
+# Manhattan, New York City
+#
+# Parcel data: NYC Department of City Planning MapPLUTO (shapefile or file
+# geodatabase), downloaded manually from
+#   https://www.nyc.gov/site/planning/data-maps/open-data/dwn-pluto-mappluto.page
+# and passed to the loader with ``--pluto PATH`` (a .zip, .shp, .gpkg, .gdb or
+# .geojson). Record the release (e.g. 24v4) in the run config; it is written to
+# results/<run>/manifest.json.
 
-name: Manhattan
+name: manhattan
 display_name: "Manhattan, NYC"
-state: NY
-country: USA
 latitude: 40.7831
 longitude: -73.9712
+crs: "EPSG:2263"          # NAD83 / New York Long Island (ftUS)
+crs_units_ft: true
+# Reference point for the distance-to-centre feature (Grand Central Terminal).
+center_lat: 40.7527
+center_lon: -73.9772
+borough_code: 1           # MapPLUTO BoroCode / Borough 'MN'
 
-geographic:
-  bounds: [-74.047285, 40.679548, -73.906982, 40.882214]
-  center: [-73.9712, 40.7831]
-  default_zoom: 14
-  crs: "EPSG:2263"  # NY State Plane Long Island
+edge_types:
+  - spatial_adjacency
+  - proximity
+  - functional_similarity
+  - street_frontage
+  - regulatory_coupling
 
-# Official NYC Open Data Sources
-data_sources:
-  # MapPLUTO - Primary Land Use Tax Lot Output
-  # Contains lot-level geographic, land use, and tax data
-  parcels:
-    name: "MapPLUTO"
-    url: "https://data.cityofnewyork.us/api/geospatial/evjd-dqpz?method=export&format=GeoJSON"
-    format: geojson
-    description: "Primary Land Use Tax Lot Output for NYC"
-    update_frequency: "Annually"
-    
-  # NYC Zoning Features
-  zoning:
-    name: "NYC Zoning Districts"
-    url: "https://data.cityofnewyork.us/api/geospatial/dazs-pvnk?method=export&format=GeoJSON"
-    format: geojson
-    description: "Zoning district boundaries"
-    
-  # Building Footprints
-  buildings:
-    name: "Building Footprints"
-    url: "https://data.cityofnewyork.us/api/geospatial/nqwf-w8eh?method=export&format=GeoJSON"
-    format: geojson
-    description: "3D building footprints with height"
-    
-  # LION Street Network
-  streets:
-    name: "LION Street Network"
-    url: "https://data.cityofnewyork.us/api/geospatial/2v4z-66xt?method=export&format=GeoJSON"
-    format: geojson
-    description: "NYC street centerlines"
-
-# Column mapping from NYC data to standard fields
+# MapPLUTO column -> PIMALUOS standard column.
 column_mapping:
-  parcel_id: "BBL"
-  lot_area_sqft: "LotArea"
-  built_far: "BuiltFAR"
-  max_far: "ResidFAR"
-  zone_district: "ZoneDist1"
-  land_use: "LandUse"
-  building_class: "BldgClass"
-  num_floors: "NumFloors"
-  year_built: "YearBuilt"
-  address: "Address"
-  owner_name: "OwnerName"
-  assessed_total: "AssessTot"
-
-# Land use code mapping (NYC MapPLUTO codes)
-land_use_categories:
-  "01": one_two_family
-  "02": multi_family_walkup
-  "03": multi_family_elevator
-  "04": mixed_residential_commercial
-  "05": commercial_office
-  "06": industrial_manufacturing
-  "07": transportation_utility
-  "08": public_facilities
-  "09": open_space
-  "10": parking
-  "11": vacant_land
-
-# Legal zoning constraints (NYC Zoning Resolution)
-zoning_constraints:
-  R1: { max_far: 0.5, max_height_ft: 35, max_stories: 2 }
-  R2: { max_far: 0.5, max_height_ft: 35, max_stories: 2 }
-  R3: { max_far: 0.5, max_height_ft: 35, max_stories: 2 }
-  R4: { max_far: 0.75, max_height_ft: 35, max_stories: 2 }
-  R5: { max_far: 1.25, max_height_ft: 40, max_stories: 4 }
-  R6: { max_far: 2.0, max_height_ft: 65, max_stories: 6 }
-  R7: { max_far: 3.44, max_height_ft: 85, max_stories: 8 }
-  R8: { max_far: 6.02, max_height_ft: 120, max_stories: 12 }
-  R9: { max_far: 7.52, max_height_ft: 145, max_stories: 15 }
-  R10: { max_far: 10.0, max_height_ft: 185, max_stories: 20 }
-  C1: { max_far: 1.0, max_height_ft: null }
-  C2: { max_far: 2.0, max_height_ft: null }
-  C4: { max_far: 3.4, max_height_ft: 125, max_stories: 12 }
-  C5: { max_far: 10.0, max_height_ft: null }
-  C6: { max_far: 15.0, max_height_ft: null }
-  M1: { max_far: 1.0, max_height_ft: 60 }
-  M2: { max_far: 2.0, max_height_ft: 60 }
-  M3: { max_far: 2.0, max_height_ft: 60 }
-
-visualization:
-  parcel_colors:
-    residential: "#4CAF50"
-    commercial: "#2196F3"
-    industrial: "#FF9800"
-    mixed: "#9C27B0"
-    open_space: "#8BC34A"
-    vacant: "#9E9E9E"
+  BBL: parcel_id
+  Address: address
+  LotArea: lot_area_sqft
+  BldgArea: bldg_area_sqft
+  NumFloors: num_floors
+  YearBuilt: year_built
+  YearAlter1: year_altered
+  LandUse: land_use
+  ZoneDist1: zone_district
+  SPDist1: special_district
+  SplitZone: split_zone
+  Overlay1: overlay
+  BuiltFAR: built_far
+  ResidFAR: max_resid_far
+  CommFAR: max_comm_far
+  FacilFAR: max_facil_far
+  AssessTot: assessed_total
+  AssessLand: assessed_land
+  UnitsRes: units_res
+  UnitsTotal: units_total
+  BldgClass: bldg_class
+  HistDist: historic_district
+  Landmark: landmark
+  LotFront: lot_front
+  LotDepth: lot_depth
+  BldgFront: bldg_front
+  BldgDepth: bldg_depth
+  IrrLotCode: irregular_lot
+  ResArea: res_area
+  ComArea: com_area
+  OfficeArea: office_area
+  RetailArea: retail_area
+  GarageArea: garage_area
+  StrgeArea: storage_area
+  FactryArea: factory_area
+  PFIRM15_FL: flood_2015
+  FIRM07_FLA: flood_2007

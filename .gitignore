@@ -81,3 +81,11 @@ index.html
 *_old.py
 verify_edges.py
 download_manhattan_data*.py
+
+# PIMALUOS run outputs and data (large; archive on Zenodo instead)
+data/
+results/*
+!results/.gitkeep
+paper/generated/*
+!paper/generated/.gitkeep
+*.pt

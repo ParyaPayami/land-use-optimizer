@@ -1,55 +1,5 @@
+"""GNN encoder, stakeholder agents/MARL, game-theoretic analysis and Pareto search.
+
+Submodules are imported lazily by callers (``from pimaluos.models.gnn import ...``)
+so that importing one does not pull in optional dependencies of another.
 """
-PIMALUOS Models Module
-
-Contains GNN and Multi-Agent Reinforcement Learning implementations.
-"""
-
-from .gnn import (
-    MultiRelationalGNN,
-    HeterogeneousGAT,
-    GraphSAGEParcelModel,
-    ParcelGNN,
-    AttentionVisualizer,
-    compute_loss,
-    train_epoch,
-    evaluate,
-)
-from .agents import (
-    StakeholderAgent,
-    UtilityFunction,
-    ConsensusVotingMechanism,
-    AgentCommunicationChannel,
-    MultiAgentEnvironment,
-    MARLTrainer,
-    load_stakeholder_profiles,
-)
-from .nash import (
-    NashEquilibriumSolver,
-    ShapleyValueCalculator,
-    ParetoAnalyzer,
-)
-from .pareto import (
-    ParetoOptimizer,
-    ParetoSolution,
-    LandUseOptimizationProblem,
-    optimize_land_use_pareto,
-)
-
-
-__all__ = [
-    "ParcelGNN",
-    "HeterogeneousGAT",
-    "MultiRelationalGNN",
-    "AttentionVisualizer",
-    "GraphSAGEParcelModel",
-    "StakeholderAgent",
-    "MultiAgentEnvironment",
-    "MARLTrainer",
-    "UtilityFunction",
-    "ConsensusVotingMechanism",
-    "NashEquilibriumSolver",
-    "ParetoOptimizer",
-    "ParetoSolution",
-    "optimize_land_use_pareto",
-]
-

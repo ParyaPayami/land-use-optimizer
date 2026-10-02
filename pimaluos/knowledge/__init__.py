@@ -1,67 +1,9 @@
-"""
-PIMALUOS Knowledge Module
+"""LLM-RAG extraction of district bulk limits from zoning text."""
 
-LLM-RAG system for zoning constraint extraction:
-- Multi-LLM abstraction layer (OpenAI, Claude, Ollama)
-- RAG pipeline with vector search
-- Structured constraint extraction with Pydantic
-"""
+from pimaluos.knowledge.llm import AnthropicLLM, BaseLLM, MockLLM, OllamaLLM, OpenAILLM, get_llm
+from pimaluos.knowledge.parser import FIELDS, ConstraintExtractor, DistrictLimits, parse_json_object
+from pimaluos.knowledge.rag import Document, DocumentLoader, RAGPipeline, TextSplitter, VectorStore
 
-from .llm import (
-    BaseLLM,
-    OpenAILLM,
-    AnthropicLLM,
-    OllamaLLM,
-    MockLLM,
-    get_llm,
-)
-from .rag import (
-    Document,
-    DocumentLoader,
-    TextSplitter,
-    VectorStore,
-    RAGPipeline,
-)
-from .parser import (
-    ZoningConstraints,
-    UseRegulations,
-    BulkRegulations,
-    LotRequirements,
-    YardRequirements,
-    ParkingRequirements,
-    InclusionaryHousing,
-    ConstraintCache,
-    ConstraintExtractor,
-    NYCZoningParser,
-    ChicagoZoningParser,
-)
-
-__all__ = [
-    # LLM
-    "BaseLLM",
-    "OpenAILLM",
-    "AnthropicLLM",
-    "OllamaLLM",
-    "MockLLM",
-    "get_llm",
-    
-    # RAG
-    "Document",
-    "DocumentLoader",
-    "TextSplitter",
-    "VectorStore",
-    "RAGPipeline",
-    
-    # Parser
-    "ZoningConstraints",
-    "UseRegulations",
-    "BulkRegulations",
-    "LotRequirements",
-    "YardRequirements",
-    "ParkingRequirements",
-    "InclusionaryHousing",
-    "ConstraintCache",
-    "ConstraintExtractor",
-    "NYCZoningParser",
-    "ChicagoZoningParser",
-]
+__all__ = ["AnthropicLLM", "BaseLLM", "MockLLM", "OllamaLLM", "OpenAILLM", "get_llm", "FIELDS",
+           "ConstraintExtractor", "DistrictLimits", "parse_json_object", "Document", "DocumentLoader",
+           "RAGPipeline", "TextSplitter", "VectorStore"]
