@@ -36,7 +36,8 @@ import pimaluos
 from pimaluos import baselines as B
 from pimaluos.core.data_loader import SyntheticCityLoader, get_data_loader
 from pimaluos.core.graph_builder import ALL_EDGE_TYPES, RELATION_NAMES
-from pimaluos.models.agents import AGENT_TYPES, PPOConfig
+from pimaluos.models.agents import AGENT_TYPES, MARLTrainer, PPOConfig
+from pimaluos.models.gnn import ParcelGNN
 from pimaluos.models.nash import analyse_consensus
 from pimaluos.models.pareto import run_nsga3
 from pimaluos.physics.capacity import CapacityParams
@@ -172,12 +173,26 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         n_rows_before = len(rec.rows)
         seed_t = {"gnn_s": 0.0, "marl_s": 0.0}
         logger.info("=== seed %d ===", seed)
-        t0 = time.time()
-        res = sysm.pretrain_gnn(epochs=gnn_cfg["epochs"], seed=seed, lr=gnn_cfg.get("lr", 1e-3),
-                                patience=gnn_cfg.get("patience", 50))
-        seed_t["gnn_s"] = time.time() - t0
+        # Stage checkpoints inside a seed, so an interrupted run loses at most one stage.
+        gnn_ck = ckpt_dir / f"seed_{seed}_gnn.pt"
+        if gnn_ck.exists():
+            st = torch.load(gnn_ck, weights_only=False)
+            model = ParcelGNN(sysm.graph["parcel"].x.shape[1], list(sysm.graph.edge_types), **sysm.gnn_kwargs)
+            model.load_state_dict(st["state_dict"])
+            model.eval()
+            sysm.gnn = model
+            gnn_out[seed] = st["history"]
+            seed_t["gnn_s"] = st["seconds"]
+            logger.info("seed %d: GNN loaded from stage checkpoint", seed)
+        else:
+            t0 = time.time()
+            res = sysm.pretrain_gnn(epochs=gnn_cfg["epochs"], seed=seed, lr=gnn_cfg.get("lr", 1e-3),
+                                    patience=gnn_cfg.get("patience", 50))
+            seed_t["gnn_s"] = time.time() - t0
+            gnn_out[seed] = res["history"]
+            torch.save({"state_dict": sysm.gnn.state_dict(), "history": res["history"],
+                        "seconds": seed_t["gnn_s"]}, gnn_ck)
         timings["gnn_s"] += seed_t["gnn_s"]
-        gnn_out[seed] = res["history"]
 
         # Baselines (deterministic except random).
         plans = {
@@ -190,21 +205,33 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         trainers = {}
         for v in config["variants"]:
             spec = variant_specs[v]
-            t0 = time.time()
             env = sysm.make_env(use_gnn=spec["use_gnn"], physics_weight=spec["physics_weight"],
                                 agent_types=spec["agent_types"], horizon=mcfg["horizon"],
                                 delta_far=mcfg["delta_far"])
-            tr = sysm.train_marl(env, mcfg["iterations"], seed, ppo)
-            seed_t["marl_s"] += time.time() - t0
-            timings["marl_s"] += time.time() - t0
+            v_ck = ckpt_dir / f"seed_{seed}_{v}.pt"
+            if v_ck.exists():
+                st = torch.load(v_ck, weights_only=False)
+                tr = MARLTrainer(env, ppo, seed=seed)
+                for a, m in tr.agents.items():
+                    m.load_state_dict(st["agents"][a])
+                marl_out[seed][v], dt = st["history"], st["seconds"]
+                logger.info("seed %d: MARL variant %s loaded from stage checkpoint", seed, v)
+            else:
+                t0 = time.time()
+                tr = sysm.train_marl(env, mcfg["iterations"], seed, ppo)
+                dt = time.time() - t0
+                marl_out[seed][v] = [
+                    {"iteration": h["iteration"],
+                     "returns": {a: h[a]["episode_return"] for a in spec["agent_types"]},
+                     "entropy": {a: h[a]["entropy"] for a in spec["agent_types"]},
+                     "added_floor_area_sqft": h["plan_summary"]["added_floor_area_sqft"]}
+                    for h in tr.history]
+                torch.save({"agents": {a: m.state_dict() for a, m in tr.agents.items()},
+                            "history": marl_out[seed][v], "seconds": dt}, v_ck)
+            seed_t["marl_s"] += dt
+            timings["marl_s"] += dt
             trainers[v] = tr
             plans[v] = tr.final_plan()[0]
-            marl_out[seed][v] = [
-                {"iteration": h["iteration"],
-                 "returns": {a: h[a]["episode_return"] for a in spec["agent_types"]},
-                 "entropy": {a: h[a]["entropy"] for a in spec["agent_types"]},
-                 "added_floor_area_sqft": h["plan_summary"]["added_floor_area_sqft"]}
-                for h in tr.history]
 
         for name, far in plans.items():
             rec.add(seed, name, False, cap.evaluate(far)["summary"])
