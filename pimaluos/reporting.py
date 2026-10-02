@@ -27,7 +27,7 @@ MACROS = [
     "NParcels", "NParcelsRaw", "NFeaturesEngineered", "NFeatures", "PlutoRelease",
     "NEdgesDirected", "NEdgesUndirected", "NIsolated",
     "EdgesAdjDir", "EdgesProxDir", "EdgesFunDir", "EdgesStreetDir", "EdgesRegDir",
-    "ExistingFAM", "ZoningCapFAM", "LotsHeadroom", "LotsAboveMax", "NTaz", "NCatch",
+    "ExistingFAM", "ZoningCapFAM", "LotsHeadroom", "LotsAboveMax", "NTaz", "NCatch", "ExistingTazOverRaw",
     "NVulnerable", "NFlood", "ExistingTazOver", "NSeeds", "NSeedsAbl", "NSeedsPareto",
     # GNN
     "GnnValLoss", "GnnMeanPredLoss", "GnnNoGraphLoss", "GnnEpochs", "GnnBestEpoch",
@@ -43,6 +43,8 @@ MACROS = [
     # Pareto
     "ParetoPop", "ParetoGen", "ParetoRefDirs", "ParetoNCold", "ParetoNSeeded", "HVCold", "HVSeeded",
     "KneeSeededAddedFAM", "KneeSeededShaded",
+    # budgets
+    "GnnPatience", "MarlIters", "MarlHorizon", "AblEpochs",
     # timings / hardware
     "TimeTotalH", "TimeGnnMin", "TimeMarlMin", "TimeParetoMin", "TimeGraphS", "Hardware", "TorchVersion",
     # RAG
@@ -339,16 +341,22 @@ def make_report(results: Path, out: Path, rag_dir: Optional[Path] = None) -> Dic
             print("WARNING: results come from the SYNTHETIC test city; do not report them.")
         v.update(NParcels=_fmt(d["n_parcels_used"]), NParcelsRaw=_fmt(d["n_parcels_in_study_area"]),
                  NFeaturesEngineered=_fmt(d["n_features_engineered"]), NFeatures=_fmt(d["n_features_used"]),
-                 PlutoRelease=str(man["config"].get("pluto_release") or TBD),
+                 PlutoRelease=(", ".join(d.get("pluto_versions") or [])
+                               or str(man["config"].get("pluto_release") or TBD)),
                  ExistingFAM=_fmt(ds["existing_floor_area_sqft"] / 1e6, 1),
                  ZoningCapFAM=_fmt(ds["zoning_capacity_floor_area_sqft"] / 1e6, 1),
                  LotsHeadroom=_fmt(ds["lots_with_headroom"]), LotsAboveMax=_fmt(ds["lots_above_zoning_max_existing"]),
                  NTaz=_fmt(ds["n_taz"]), NCatch=_fmt(ds["n_catchments"]), NVulnerable=_fmt(ds["n_vulnerable_lots"]),
                  NFlood=_fmt(ds["n_flood_lots"]), ExistingTazOver=_fmt(ds["existing_taz_over_capacity"]),
+                 ExistingTazOverRaw=_fmt(ds.get("existing_taz_over_capacity_frontage_only")),
                  NSeeds=_fmt(len(man["config"]["seeds"])),
                  NSeedsAbl=_fmt(len(man["config"]["edge_ablation"]["seeds"])),
                  NSeedsPareto=_fmt(len(man["config"]["pareto"]["seeds"])),
                  GnnEpochs=_fmt(man["config"]["gnn"]["epochs"]),
+                 GnnPatience=_fmt(man["config"]["gnn"].get("patience", 50)),
+                 MarlIters=_fmt(man["config"]["marl"]["iterations"]),
+                 MarlHorizon=_fmt(man["config"]["marl"]["horizon"]),
+                 AblEpochs=_fmt(man["config"]["edge_ablation"].get("epochs")),
                  ParetoPop=_fmt(man["config"]["pareto"]["pop_size"]),
                  ParetoGen=_fmt(man["config"]["pareto"]["generations"]),
                  TimeTotalH=_fmt(t.get("total_s", np.nan) / 3600, 1), TimeGnnMin=_fmt(t.get("gnn_s", np.nan) / 60, 1),

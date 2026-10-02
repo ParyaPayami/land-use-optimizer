@@ -15,9 +15,11 @@ Building envelope
 Traffic (BPR screen)
     Peak-hour vehicle trips per lot = floor area by land-use class x trip rate.
     Lots are aggregated to square traffic-analysis cells (``taz_size_ft``).
-    Cell capacity is proportional to the street frontage of its lots; one global
-    constant is calibrated so that the median existing-conditions V/C equals
-    ``vc_reference``. Travel-time index = 1 + alpha (V/C)^beta. A cell is over
+    Cell capacity is proportional to the street frontage of its lots, with one
+    global constant calibrated so that the median existing-conditions V/C equals
+    ``vc_reference``; it is floored at the capacity at which the cell's existing
+    demand runs at ``vc_reference`` (the existing network is assumed to serve
+    existing trips). Travel-time index = 1 + alpha (V/C)^beta. A cell is over
     capacity when V/C > ``vc_threshold``.
 
 Hydrology (Rational Method screen)
@@ -164,7 +166,11 @@ class CapacityModel:
         valid = (frontage_taz > 0) & (demand0 > 0)
         raw_vc = np.where(valid, demand0 / np.maximum(frontage_taz, 1e-9), 0.0)
         kappa = np.median(raw_vc[valid]) / p.vc_reference if valid.any() else 1.0
-        self.cap_taz = np.maximum(frontage_taz * kappa, 1e-9)
+        self.taz_over_frontage_only = int((demand0 / np.maximum(frontage_taz * kappa, 1e-9) > p.vc_threshold).sum())
+        # A cell's capacity is at least what its existing demand needs to run at the
+        # reference V/C: the existing network is assumed to serve existing trips
+        # (Manhattan's avenues and transit are not captured by lot frontage).
+        self.cap_taz = np.maximum(np.maximum(frontage_taz * kappa, demand0 / p.vc_reference), 1e-9)
 
         # Hydrology capacity = existing load x (1 + headroom).
         self.c_perv = np.array([DEFAULT_PERVIOUS_C.get(c, p.paved_c) for c in self.cls])

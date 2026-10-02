@@ -50,3 +50,11 @@ def test_parse_street_name_keeps_numbers():
     assert parse_street_name("500 WEST 110 STREET") == "WEST 110 STREET"
     assert parse_street_name("12-14 E 4TH ST") == "EAST 4 STREET"
     assert parse_street_name("") is None
+
+
+def test_manufacturing_cap_included_affordable_excluded_by_default():
+    raw = _raw(ResidFAR=0.0, CommFAR=2.0, FacilFAR=4.8, ManuFAR=5.0, AffResFAR=7.2)
+    g = standardise_parcels(raw, MAPPING, "EPSG:2263")
+    assert np.isclose(g["max_far"].iloc[0], 5.0)
+    g2 = standardise_parcels(raw, MAPPING, "EPSG:2263", include_affordable_far=True)
+    assert np.isclose(g2["max_far"].iloc[0], 7.2)

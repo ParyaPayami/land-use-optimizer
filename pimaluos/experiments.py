@@ -58,6 +58,7 @@ DEFAULT_CONFIG = {
     "voting_sensitivity": {"enabled": True, "developer_weights": [0.1, 0.2, 0.3, 0.4, 0.5]},
     "pareto": {"enabled": True, "seeds": [0, 1, 2], "pop_size": 120, "generations": 100, "n_partitions": 7},
     "capacity": {},
+    "data": {"include_affordable_far": False},
 }
 
 
@@ -73,6 +74,18 @@ def load_config(path: Optional[str]) -> Dict:
     if path:
         cfg = _merge(DEFAULT_CONFIG, yaml.safe_load(Path(path).read_text()) or {})
     return cfg
+
+
+def _json_default(o):
+    if isinstance(o, (np.integer,)):
+        return int(o)
+    if isinstance(o, (np.floating,)):
+        return float(o)
+    if isinstance(o, (np.bool_,)):
+        return bool(o)
+    if isinstance(o, np.ndarray):
+        return o.tolist()
+    raise TypeError(f"not JSON serialisable: {type(o)}")
 
 
 class _Recorder:
@@ -98,7 +111,8 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
     if config["city"] == "synthetic":
         ds = SyntheticCityLoader(**config.get("synthetic", {})).load()
     else:
-        ds = get_data_loader(config["city"], pluto_path, cache_dir=out_dir / "cache").load()
+        ds = get_data_loader(config["city"], pluto_path,
+                             include_affordable_far=config.get("data", {}).get("include_affordable_far", False)).load()
     timings["data_s"] = time.time() - t0
     gnn_cfg = dict(config["gnn"])
     gnn_kwargs = {k: gnn_cfg.pop(k) for k in ["hidden_channels", "embed_dim", "heads"] if k in gnn_cfg}
@@ -120,6 +134,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         "n_taz": int(cap.n_taz), "n_catchments": int(cap.n_catch),
         "n_vulnerable_lots": int(cap.vulnerable.sum()), "n_flood_lots": int(cap.flood.sum()),
         "existing_taz_over_capacity": int(baseline_summary["taz_over_capacity"]),
+        "existing_taz_over_capacity_frontage_only": int(cap.taz_over_frontage_only),
         "lots_above_zoning_max_existing": int(baseline_summary["lots_above_zoning_max_existing"]),
         "n_shadow_pairs": int(len(cap.pair_i)),
     }
@@ -137,13 +152,31 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                                 agent_types=[a for a in AGENT_TYPES if a != "equity_advocate"]),
     }
     timings["gnn_s"] = timings["marl_s"] = 0.0
+    ckpt_dir = out_dir / "checkpoints"
+    ckpt_dir.mkdir(exist_ok=True)
 
     for seed in seeds:
+        ck = ckpt_dir / f"seed_{seed}.json"
+        if ck.exists():
+            done = json.loads(ck.read_text())
+            logger.info("=== seed %d: loaded from checkpoint ===", seed)
+            gnn_out[seed], marl_out[seed] = done["gnn"], done["marl"]
+            rec.rows.extend(done["rows"])
+            if done.get("nash") is not None:
+                nash_out[seed] = done["nash"]
+            if done.get("vote") is not None:
+                vote_out[seed] = done["vote"]
+            for k in ("gnn_s", "marl_s"):
+                timings[k] += done["timings"][k]
+            continue
+        n_rows_before = len(rec.rows)
+        seed_t = {"gnn_s": 0.0, "marl_s": 0.0}
         logger.info("=== seed %d ===", seed)
         t0 = time.time()
         res = sysm.pretrain_gnn(epochs=gnn_cfg["epochs"], seed=seed, lr=gnn_cfg.get("lr", 1e-3),
                                 patience=gnn_cfg.get("patience", 50))
-        timings["gnn_s"] += time.time() - t0
+        seed_t["gnn_s"] = time.time() - t0
+        timings["gnn_s"] += seed_t["gnn_s"]
         gnn_out[seed] = res["history"]
 
         # Baselines (deterministic except random).
@@ -162,6 +195,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                                 agent_types=spec["agent_types"], horizon=mcfg["horizon"],
                                 delta_far=mcfg["delta_far"])
             tr = sysm.train_marl(env, mcfg["iterations"], seed, ppo)
+            seed_t["marl_s"] += time.time() - t0
             timings["marl_s"] += time.time() - t0
             trainers[v] = tr
             plans[v] = tr.final_plan()[0]
@@ -200,11 +234,14 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             torch.save({"gnn": sysm.gnn.state_dict(),
                         "agents": {a: m.state_dict() for a, m in trainers["pimaluos"].agents.items()}},
                        out_dir / "pimaluos_seed0.pt")
+        ck.write_text(json.dumps({"gnn": gnn_out[seed], "marl": marl_out[seed],
+                                  "rows": rec.rows[n_rows_before:], "nash": nash_out.get(seed),
+                                  "vote": vote_out.get(seed), "timings": seed_t}, default=_json_default))
 
     rec.frame().to_csv(out_dir / "metrics.csv", index=False)
     (out_dir / "gnn.json").write_text(json.dumps(gnn_out))
     (out_dir / "marl.json").write_text(json.dumps(marl_out))
-    (out_dir / "nash.json").write_text(json.dumps(nash_out, default=float))
+    (out_dir / "nash.json").write_text(json.dumps(nash_out, default=_json_default))
     (out_dir / "voting_sensitivity.json").write_text(json.dumps(vote_out))
 
     # ------------------------------------------------------------ edge ablation
@@ -213,21 +250,22 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         configs = {"all": ALL_EDGE_TYPES, "spatial_adjacency_only": ["spatial_adjacency"]}
         for et in ALL_EDGE_TYPES:
             configs[f"without_{et}"] = [e for e in ALL_EDGE_TYPES if e != et]
-        abl = {}
+        abl_ck = ckpt_dir / "edge_ablation.json"
+        abl = json.loads(abl_ck.read_text()) if abl_ck.exists() else {}
+        configs["no_graph"] = []
         for name, ets in configs.items():
             rels = [RELATION_NAMES[e] for e in ets]
-            abl[name] = {"edge_types": ets, "val_loss": {}}
+            abl.setdefault(name, {"edge_types": ets, "val_loss": {}})
             for seed in config["edge_ablation"]["seeds"]:
+                if str(seed) in abl[name]["val_loss"]:
+                    continue
                 h = sysm.pretrain_gnn(epochs=config["edge_ablation"]["epochs"], seed=seed, relations=rels,
                                       patience=gnn_cfg.get("patience", 50))["history"]
-                abl[name]["val_loss"][seed] = h["best_val_loss"]
-        abl["no_graph"] = {"edge_types": [], "val_loss": {}}
-        abl["mean_predictor"] = {"edge_types": [], "val_loss": {}}
-        for seed in config["edge_ablation"]["seeds"]:
-            h = sysm.pretrain_gnn(epochs=config["edge_ablation"]["epochs"], seed=seed, relations=[],
-                                  patience=gnn_cfg.get("patience", 50))["history"]
-            abl["no_graph"]["val_loss"][seed] = h["best_val_loss"]
-            abl["mean_predictor"]["val_loss"][seed] = h["mean_predictor_val_loss"]
+                abl[name]["val_loss"][str(seed)] = h["best_val_loss"]
+                if name == "no_graph":
+                    abl.setdefault("mean_predictor", {"edge_types": [], "val_loss": {}})
+                    abl["mean_predictor"]["val_loss"][str(seed)] = h["mean_predictor_val_loss"]
+                abl_ck.write_text(json.dumps(abl, indent=1))
         (out_dir / "edge_ablation.json").write_text(json.dumps(abl, indent=1))
         timings["edge_ablation_s"] = time.time() - t0
 
@@ -235,7 +273,6 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
     if config["pareto"]["enabled"]:
         t0 = time.time()
         pc = config["pareto"]
-        par = {}
         seed0_plans = {k: np.load(out_dir / "plans" / f"{k}.npz") for k in ["pimaluos", "zoning_buildout"]
                        if (out_dir / "plans" / f"{k}.npz").exists()}
         seeds_for_init = [cap.far0]
@@ -243,17 +280,22 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             seeds_for_init += [seed0_plans["pimaluos"]["far"], seed0_plans["pimaluos"]["far_verified"]]
         if "zoning_buildout" in seed0_plans:
             seeds_for_init += [seed0_plans["zoning_buildout"]["far_verified"]]
+        par_ck = ckpt_dir / "pareto.json"
+        par = json.loads(par_ck.read_text()) if par_ck.exists() else {}
         for seed in pc["seeds"]:
-            par[seed] = {}
+            par.setdefault(str(seed), {})
             for mode, sp in [("cold", None), ("seeded", seeds_for_init)]:
+                if mode in par[str(seed)]:
+                    continue
                 r = run_nsga3(cap, pc["pop_size"], pc["generations"], pc["n_partitions"], seed, sp)
                 knee_far = r["far"][r["knee"]]
-                par[seed][mode] = {"F": r["F"].tolist(), "knee": r["knee"], "hv": r["hv_history"],
+                par[str(seed)][mode] = {"F": r["F"].tolist(), "knee": r["knee"], "hv": r["hv_history"],
                                    "knee_summary": cap.evaluate(knee_far)["summary"],
-                                   "n_solutions": int(len(r["F"])), "n_ref_dirs": r["n_ref_dirs"]}
+                                        "n_solutions": int(len(r["F"])), "n_ref_dirs": r["n_ref_dirs"]}
+                par_ck.write_text(json.dumps(par, default=_json_default))
                 if seed == pc["seeds"][0]:
                     np.savez_compressed(out_dir / "plans" / f"pareto_knee_{mode}.npz", far=knee_far)
-        (out_dir / "pareto.json").write_text(json.dumps(par, default=float))
+        (out_dir / "pareto.json").write_text(json.dumps(par, default=_json_default))
         timings["pareto_s"] = time.time() - t0
 
     timings["total_s"] = time.time() - t_start

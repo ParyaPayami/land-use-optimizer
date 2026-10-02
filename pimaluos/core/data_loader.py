@@ -59,7 +59,7 @@ OPEN_SPACE_CODE = "09"
 
 NUMERIC_COLUMNS = [
     "lot_area_sqft", "bldg_area_sqft", "num_floors", "year_built", "year_altered",
-    "built_far", "max_resid_far", "max_comm_far", "max_facil_far",
+    "built_far", "max_resid_far", "max_comm_far", "max_facil_far", "max_manu_far", "max_affres_far",
     "assessed_total", "assessed_land", "units_res", "units_total",
     "lot_front", "lot_depth", "bldg_front", "bldg_depth",
     "res_area", "com_area", "office_area", "retail_area", "garage_area",
@@ -120,14 +120,20 @@ def _flag(series: Optional[pd.Series], n: int) -> np.ndarray:
     return (pd.to_numeric(series, errors="coerce").fillna(0) > 0).astype(float).values
 
 
+BASE_FAR_CAPS = ["max_resid_far", "max_comm_far", "max_facil_far", "max_manu_far"]
+
+
 def standardise_parcels(
-    gdf: gpd.GeoDataFrame, column_mapping: Dict[str, str], target_crs: str
+    gdf: gpd.GeoDataFrame, column_mapping: Dict[str, str], target_crs: str,
+    include_affordable_far: bool = False,
 ) -> gpd.GeoDataFrame:
     """Rename columns, coerce types and derive regulatory maxima.
 
-    ``max_far`` is the **maximum** of the residential, commercial and community
-    facility FAR limits. These are alternative caps for different uses, so they
-    must not be summed.
+    ``max_far`` is the **maximum** of the residential, commercial, community
+    facility and manufacturing FAR limits (MapPLUTO ResidFAR, CommFAR, FacilFAR,
+    ManuFAR). These are alternative caps for different uses, so they must not be
+    summed. The higher cap available only when qualifying affordable housing is
+    provided (AffResFAR, from 26v1) is excluded unless ``include_affordable_far``.
     """
     gdf = gdf.rename(columns={k: v for k, v in column_mapping.items() if k in gdf.columns})
     if gdf.crs is None:
@@ -151,9 +157,10 @@ def standardise_parcels(
         gdf["built_far"].notna(), gdf["bldg_area_sqft"] / gdf["lot_area_sqft"]
     ).fillna(0)
 
-    for c in ["max_resid_far", "max_comm_far", "max_facil_far"]:
+    for c in BASE_FAR_CAPS + ["max_affres_far"]:
         gdf[c] = gdf[c].fillna(0).clip(lower=0)
-    gdf["max_far"] = gdf[["max_resid_far", "max_comm_far", "max_facil_far"]].max(axis=1)
+    caps = BASE_FAR_CAPS + (["max_affres_far"] if include_affordable_far else [])
+    gdf["max_far"] = gdf[caps].max(axis=1)
 
     gdf["land_use"] = _normalise_land_use(gdf["land_use"] if "land_use" in gdf else pd.Series(np.nan, index=gdf.index))
     gdf["land_use_class"] = gdf["land_use"].map(LAND_USE_CLASS).fillna("vacant")
@@ -203,7 +210,7 @@ def compute_node_features(
         f[c] = gdf[c].fillna(0).clip(lower=0)
 
     # --- Regulation
-    for c in ["max_resid_far", "max_comm_far", "max_facil_far", "max_far"]:
+    for c in BASE_FAR_CAPS + ["max_affres_far", "max_far"]:
         f[c] = gdf[c]
     f["far_utilisation"] = (gdf["built_far"] / gdf["max_far"].replace(0, np.nan)).fillna(0).clip(0, 5)
     f["historic_district"] = _flag(gdf.get("historic_district"), n)
@@ -253,27 +260,46 @@ def transform_features(features_raw: pd.DataFrame) -> pd.DataFrame:
     return f.fillna(0.0)
 
 
-def _read_layer(path: Union[str, Path]) -> gpd.GeoDataFrame:
+def _read_layer(path: Union[str, Path], where: Optional[str] = None,
+                preferred_layer: str = "MapPLUTO") -> gpd.GeoDataFrame:
+    """Read a parcel layer; ``where`` is an OGR SQL filter applied while reading.
+
+    MapPLUTO archives contain both the shoreline-clipped ``MapPLUTO`` layer and
+    ``MapPLUTO_UNCLIPPED``; the clipped layer is used when present.
+    """
     path = Path(path)
     if not path.exists():
         raise FileNotFoundError(
             f"Parcel file not found: {path}. Download MapPLUTO from NYC DCP and pass --pluto PATH."
         )
-    if path.suffix.lower() == ".zip":
-        return gpd.read_file(f"zip://{path}")
     if path.suffix.lower() == ".parquet":
-        return gpd.read_parquet(path)
-    return gpd.read_file(path)
+        g = gpd.read_parquet(path)
+        return g
+    src = f"zip://{path}" if path.suffix.lower() == ".zip" else str(path)
+    kwargs = {}
+    if where:
+        kwargs["where"] = where
+    try:
+        import pyogrio
+
+        layers = [lyr[0] for lyr in pyogrio.list_layers(src)]
+        if len(layers) > 1:
+            kwargs["layer"] = preferred_layer if preferred_layer in layers else layers[0]
+    except Exception:  # noqa: BLE001 - fall back to the default layer
+        pass
+    return gpd.read_file(src, **kwargs)
 
 
 class ParcelFileLoader:
     """Load a local parcel layer using a city YAML column mapping."""
 
-    def __init__(self, city: str, parcel_path: Union[str, Path], cache_dir: Optional[Path] = None):
+    def __init__(self, city: str, parcel_path: Union[str, Path], cache_dir: Optional[Path] = None,
+                 include_affordable_far: bool = False):
         self.city = city
         self.config: CityConfig = get_city_config(city)
         self.parcel_path = Path(parcel_path)
         self.cache_dir = Path(cache_dir) if cache_dir else None
+        self.include_affordable_far = include_affordable_far
 
     def _filter_study_area(self, gdf: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
         boro = getattr(self.config, "borough_code", None)
@@ -287,18 +313,17 @@ class ParcelFileLoader:
         return gdf
 
     def load(self) -> ParcelDataset:
-        cache = self.cache_dir / f"{self.city}_parcels.parquet" if self.cache_dir else None
-        if cache is not None and cache.exists():
-            gdf = gpd.read_parquet(cache)
-            n_raw = gdf.attrs.get("n_raw", len(gdf))
-        else:
+        boro = getattr(self.config, "borough_code", None)
+        where = f"BoroCode = {int(boro)}" if boro is not None else None
+        try:
+            raw = _read_layer(self.parcel_path, where=where)
+        except Exception:  # noqa: BLE001 - layer without BoroCode: filter after reading
             raw = _read_layer(self.parcel_path)
-            raw = self._filter_study_area(raw)
-            n_raw = len(raw)
-            gdf = standardise_parcels(raw, getattr(self.config, "column_mapping", {}), self.config.crs)
-            if cache is not None:
-                cache.parent.mkdir(parents=True, exist_ok=True)
-                gdf.to_parquet(cache)
+        raw = self._filter_study_area(raw)
+        n_raw = len(raw)
+        versions = sorted(raw["Version"].dropna().astype(str).unique()) if "Version" in raw else []
+        gdf = standardise_parcels(raw, getattr(self.config, "column_mapping", {}), self.config.crs,
+                                  include_affordable_far=self.include_affordable_far)
 
         n_before = len(gdf)
         gdf = gdf[(gdf["lot_area_sqft"] > 0)].reset_index(drop=True)
@@ -320,16 +345,33 @@ class ParcelFileLoader:
             "n_features_used": int(feats.shape[1]),
             "features_used": list(feats.columns),
             "crs": self.config.crs,
+            "pluto_versions": versions,
+            "source_sha256": _sha256(self.parcel_path),
+            "include_affordable_far": self.include_affordable_far,
             "synthetic": False,
         }
         return ParcelDataset(gdf, raw_f, feats, list(feats.columns), meta)
 
 
+def _sha256(path: Path) -> Optional[str]:
+    import hashlib
+
+    path = Path(path)
+    if not path.is_file():
+        return None
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
 class ManhattanDataLoader(ParcelFileLoader):
     """MapPLUTO loader restricted to Manhattan (BoroCode 1)."""
 
-    def __init__(self, parcel_path: Union[str, Path], cache_dir: Optional[Path] = None):
-        super().__init__("manhattan", parcel_path, cache_dir)
+    def __init__(self, parcel_path: Union[str, Path], cache_dir: Optional[Path] = None,
+                 include_affordable_far: bool = False):
+        super().__init__("manhattan", parcel_path, cache_dir, include_affordable_far)
 
 
 class SyntheticCityLoader:

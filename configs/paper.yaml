@@ -1,10 +1,15 @@
-# Full Manhattan experiment reported in the manuscript.
-# pimaluos run --config configs/paper.yaml --pluto <MapPLUTO .zip/.shp/.gdb> --out results/paper
+# Manhattan experiment reported in the manuscript.
+#   pimaluos run --config configs/paper.yaml --pluto data/raw/nyc_mappluto_26v2_arc_shp.zip --out results/paper
+# Data: NYC DCP MapPLUTO 26v2 (shoreline-clipped shapefile, nyc_mappluto_26v2_arc_shp.zip,
+#   sha256 38b518ff2f6ccc7e2824cac30cadaf15edc9d35933eb5eae0e10dab432774ecc), downloaded 2026-10-02 from
+#   https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/mappluto/nyc_mappluto_26v2_arc_shp.zip
+# Budgets are sized for a 4-core CPU (about 10 h); they are reported in the paper via generated macros.
 city: manhattan
-pluto_release: null      # REQUIRED: the MapPLUTO release you downloaded, e.g. "26v1"
-seeds: [0, 1, 2, 3, 4]
-gnn: {epochs: 300, lr: 0.001, patience: 50, hidden_channels: 256, embed_dim: 128, heads: 4}
-edge_ablation: {enabled: true, seeds: [0, 1, 2], epochs: 150}
-marl: {iterations: 100, horizon: 10, delta_far: 0.5}
+pluto_release: "26v2"
+seeds: [0, 1, 2]
+gnn: {epochs: 150, lr: 0.001, patience: 30, hidden_channels: 256, embed_dim: 128, heads: 4}
+edge_ablation: {enabled: true, seeds: [0], epochs: 80}
+marl: {iterations: 60, horizon: 10, delta_far: 0.5}
 nash: {enabled: true, n_lots: 200}
+voting_sensitivity: {enabled: true, developer_weights: [0.1, 0.2, 0.3, 0.4, 0.5]}
 pareto: {enabled: true, seeds: [0, 1, 2], pop_size: 120, generations: 100, n_partitions: 7}

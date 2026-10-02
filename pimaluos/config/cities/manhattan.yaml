@@ -43,6 +43,8 @@ column_mapping:
   ResidFAR: max_resid_far
   CommFAR: max_comm_far
   FacilFAR: max_facil_far
+  ManuFAR: max_manu_far
+  AffResFAR: max_affres_far
   AssessTot: assessed_total
   AssessLand: assessed_land
   UnitsRes: units_res
