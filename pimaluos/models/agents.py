@@ -53,6 +53,7 @@ MapPLUTO-derived proxies (no census data are joined):
 
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
@@ -325,8 +326,32 @@ class MARLTrainer:
         out["episode_return"] = float(R.sum(0).mean().item())
         return out
 
-    def train(self, iterations: int, logger=None) -> List[Dict]:
-        for it in range(iterations):
+    def train(self, iterations: int, logger=None, resume_path=None, ckpt_every: int = 5) -> List[Dict]:
+        """Train for ``iterations`` PPO iterations.
+
+        If ``resume_path`` is given, the full training state (including RNG states)
+        is saved there every ``ckpt_every`` iterations and training resumes from it,
+        bit-for-bit, when it exists.
+        """
+        start = 0
+        if resume_path is not None and os.path.exists(resume_path):
+            ck = torch.load(resume_path, weights_only=False)
+            for a in self.agents:
+                self.agents[a].load_state_dict(ck["agents"][a])
+                self.opts[a].load_state_dict(ck["opts"][a])
+            self.history, start = ck["history"], ck["iteration"]
+            self.rng.bit_generator.state = ck["np_rng"]
+            torch.set_rng_state(ck["torch_rng"])
+            if logger:
+                logger.info("MARL resumed at iteration %d", start)
+        for it in range(start, iterations):
+            if resume_path is not None and it > start and it % ckpt_every == 0:
+                tmp = f"{resume_path}.tmp"
+                torch.save({"agents": {a: m.state_dict() for a, m in self.agents.items()},
+                            "opts": {a: o.state_dict() for a, o in self.opts.items()},
+                            "history": self.history, "iteration": it,
+                            "np_rng": self.rng.bit_generator.state, "torch_rng": torch.get_rng_state()}, tmp)
+                os.replace(tmp, resume_path)
             buf = self._rollout()
             frac = 1.0 - it / max(iterations, 1)
             rec = {"iteration": it}

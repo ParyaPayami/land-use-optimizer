@@ -23,6 +23,7 @@ training; the reported validation loss reconstructs masked validation nodes.
 from __future__ import annotations
 
 import copy
+import os
 from typing import Dict, List, Optional, Tuple
 
 import torch
@@ -146,11 +147,15 @@ def pretrain_gnn(
     patience: int = 50,
     log_every: int = 25,
     logger=None,
+    resume_path=None,
+    ckpt_every: int = 10,
 ) -> Dict:
     """Masked-feature pre-training with a held-out validation node set.
 
     Returns a history dict with per-epoch train and validation losses; the model
-    is left at the parameters with the lowest validation loss.
+    is left at the parameters with the lowest validation loss. If ``resume_path``
+    is given, the full training state (including RNG states) is saved there every
+    ``ckpt_every`` epochs and training resumes from it, bit-for-bit, when it exists.
     """
     g = torch.Generator().manual_seed(seed)
     n = data[NODE].num_nodes
@@ -163,7 +168,24 @@ def pretrain_gnn(
     hist = {"train_loss": [], "val_loss": [], "best_epoch": 0, "n_train_nodes": int(len(train_idx)),
             "n_val_nodes": int(n_val)}
     best, best_state, bad = float("inf"), copy.deepcopy(model.state_dict()), 0
-    for ep in range(epochs):
+    start = 0
+    if resume_path is not None and os.path.exists(resume_path):
+        ck = torch.load(resume_path, weights_only=False)
+        model.load_state_dict(ck["model"])
+        opt.load_state_dict(ck["opt"])
+        sched.load_state_dict(ck["sched"])
+        hist, best, best_state, bad, start = ck["hist"], ck["best"], ck["best_state"], ck["bad"], ck["epoch"]
+        g.set_state(ck["g"])
+        torch.set_rng_state(ck["torch_rng"])
+        if logger:
+            logger.info("GNN resumed at epoch %d", start)
+    for ep in range(start, epochs):
+        if resume_path is not None and ep > start and ep % ckpt_every == 0:
+            tmp = f"{resume_path}.tmp"
+            torch.save({"model": model.state_dict(), "opt": opt.state_dict(), "sched": sched.state_dict(),
+                        "hist": hist, "best": best, "best_state": best_state, "bad": bad, "epoch": ep,
+                        "g": g.get_state(), "torch_rng": torch.get_rng_state()}, tmp)
+            os.replace(tmp, resume_path)
         model.train()
         tgt = train_idx[torch.randperm(len(train_idx), generator=g)[:n_mask]]
         loss = masked_reconstruction_loss(model, data, tgt)

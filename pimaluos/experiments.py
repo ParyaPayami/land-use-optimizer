@@ -77,6 +77,19 @@ def load_config(path: Optional[str]) -> Dict:
     return cfg
 
 
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write via a temporary file so an interrupted write never leaves a corrupt checkpoint."""
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
+
+
+def _atomic_torch_save(obj, path: Path) -> None:
+    tmp = path.with_name(path.name + ".tmp")
+    torch.save(obj, tmp)
+    tmp.replace(path)
+
 def _json_default(o):
     if isinstance(o, (np.integer,)):
         return int(o)
@@ -187,10 +200,11 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         else:
             t0 = time.time()
             res = sysm.pretrain_gnn(epochs=gnn_cfg["epochs"], seed=seed, lr=gnn_cfg.get("lr", 1e-3),
-                                    patience=gnn_cfg.get("patience", 50))
+                                    patience=gnn_cfg.get("patience", 50),
+                                    resume_path=str(ckpt_dir / f"seed_{seed}_gnn.partial.pt"))
             seed_t["gnn_s"] = time.time() - t0
             gnn_out[seed] = res["history"]
-            torch.save({"state_dict": sysm.gnn.state_dict(), "history": res["history"],
+            _atomic_torch_save({"state_dict": sysm.gnn.state_dict(), "history": res["history"],
                         "seconds": seed_t["gnn_s"]}, gnn_ck)
         timings["gnn_s"] += seed_t["gnn_s"]
 
@@ -218,7 +232,8 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 logger.info("seed %d: MARL variant %s loaded from stage checkpoint", seed, v)
             else:
                 t0 = time.time()
-                tr = sysm.train_marl(env, mcfg["iterations"], seed, ppo)
+                tr = sysm.train_marl(env, mcfg["iterations"], seed, ppo,
+                                     resume_path=str(ckpt_dir / f"seed_{seed}_{v}.partial.pt"))
                 dt = time.time() - t0
                 marl_out[seed][v] = [
                     {"iteration": h["iteration"],
@@ -226,7 +241,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                      "entropy": {a: h[a]["entropy"] for a in spec["agent_types"]},
                      "added_floor_area_sqft": h["plan_summary"]["added_floor_area_sqft"]}
                     for h in tr.history]
-                torch.save({"agents": {a: m.state_dict() for a, m in tr.agents.items()},
+                _atomic_torch_save({"agents": {a: m.state_dict() for a, m in tr.agents.items()},
                             "history": marl_out[seed][v], "seconds": dt}, v_ck)
             seed_t["marl_s"] += dt
             timings["marl_s"] += dt
@@ -261,7 +276,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             torch.save({"gnn": sysm.gnn.state_dict(),
                         "agents": {a: m.state_dict() for a, m in trainers["pimaluos"].agents.items()}},
                        out_dir / "pimaluos_seed0.pt")
-        ck.write_text(json.dumps({"gnn": gnn_out[seed], "marl": marl_out[seed],
+        _atomic_write_text(ck, json.dumps({"gnn": gnn_out[seed], "marl": marl_out[seed],
                                   "rows": rec.rows[n_rows_before:], "nash": nash_out.get(seed),
                                   "vote": vote_out.get(seed), "timings": seed_t}, default=_json_default))
 
@@ -287,12 +302,13 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 if str(seed) in abl[name]["val_loss"]:
                     continue
                 h = sysm.pretrain_gnn(epochs=config["edge_ablation"]["epochs"], seed=seed, relations=rels,
-                                      patience=gnn_cfg.get("patience", 50))["history"]
+                                      patience=gnn_cfg.get("patience", 50),
+                                      resume_path=str(ckpt_dir / f"ablation_{name}_{seed}.partial.pt"))["history"]
                 abl[name]["val_loss"][str(seed)] = h["best_val_loss"]
                 if name == "no_graph":
                     abl.setdefault("mean_predictor", {"edge_types": [], "val_loss": {}})
                     abl["mean_predictor"]["val_loss"][str(seed)] = h["mean_predictor_val_loss"]
-                abl_ck.write_text(json.dumps(abl, indent=1))
+                _atomic_write_text(abl_ck, json.dumps(abl, indent=1))
         (out_dir / "edge_ablation.json").write_text(json.dumps(abl, indent=1))
         timings["edge_ablation_s"] = time.time() - t0
 
@@ -319,7 +335,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 par[str(seed)][mode] = {"F": r["F"].tolist(), "knee": r["knee"], "hv": r["hv_history"],
                                    "knee_summary": cap.evaluate(knee_far)["summary"],
                                         "n_solutions": int(len(r["F"])), "n_ref_dirs": r["n_ref_dirs"]}
-                par_ck.write_text(json.dumps(par, default=_json_default))
+                _atomic_write_text(par_ck, json.dumps(par, default=_json_default))
                 if seed == pc["seeds"][0]:
                     np.savez_compressed(out_dir / "plans" / f"pareto_knee_{mode}.npz", far=knee_far)
         (out_dir / "pareto.json").write_text(json.dumps(par, default=_json_default))

@@ -84,9 +84,9 @@ class UrbanOptSystem:
                                      voting_weights=voting_weights, utility_weights=utility_weights)
 
     def train_marl(self, env: MultiAgentEnvironment, iterations: int = 100, seed: int = 0,
-                   ppo: Optional[PPOConfig] = None) -> MARLTrainer:
+                   ppo: Optional[PPOConfig] = None, resume_path=None) -> MARLTrainer:
         tr = MARLTrainer(env, ppo, seed=seed)
-        tr.train(iterations, logger=logger)
+        tr.train(iterations, logger=logger, resume_path=resume_path)
         return tr
 
     def optimise(self, iterations: int = 100, seed: int = 0, use_gnn: bool = True, **env_kw) -> np.ndarray:
