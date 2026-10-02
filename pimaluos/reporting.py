@@ -75,8 +75,26 @@ def write_macros(values: Dict[str, str], path: Path):
     path.write_text("\n".join(lines) + "\n")
 
 
-def write_pending(path: Path):
-    write_macros({}, path)
+TABLE_COLUMNS = {"tab_graph_rows": 3, "tab_edge_ablation_rows": 3, "tab_main_rows": 8,
+                 "tab_voting_rows": 4, "tab_rag_rows": 4}
+
+
+def _fill_missing(out: Path):
+    """Every table/list file the manuscript inputs must exist; missing ones get a TBD row."""
+    for name, ncol in TABLE_COLUMNS.items():
+        f = out / f"{name}.tex"
+        if not f.exists():
+            f.write_text(f"\\multicolumn{{{ncol}}}{{c}}{{{TBD} (run \\texttt{{pimaluos report}})}} \\\\\n")
+    f = out / "features_used.tex"
+    if not f.exists():
+        f.write_text(TBD + "\n")
+
+
+def write_pending(out: Path):
+    """Write the all-TBD asset folder used before any run exists (paper/pending)."""
+    out.mkdir(parents=True, exist_ok=True)
+    write_macros({}, out / "macros.tex")
+    _fill_missing(out)
 
 
 def _metric(df: pd.DataFrame, method: str, metric: str, verified: bool):
@@ -300,7 +318,7 @@ def table_rag(rag: Dict, out: Path):
 
 def table_features(manifest: Dict, out: Path):
     feats = manifest["data"]["features_used"]
-    txt = ", ".join(f.replace("_", r"\_") for f in feats)
+    txt = ", \\allowbreak ".join("\\texttt{" + f.replace("_", r"\_") + "}" for f in feats)
     (out / "features_used.tex").write_text(txt + "\n")
 
 
@@ -430,4 +448,5 @@ def make_report(results: Path, out: Path, rag_dir: Optional[Path] = None) -> Dic
         table_rag(rag, out)
 
     write_macros(v, out / "macros.tex")
+    _fill_missing(out)
     return v

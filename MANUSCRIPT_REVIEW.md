@@ -1,5 +1,13 @@
 # PIMALUOS — Pre-submission Review of Manuscript, Code, Results and References
 
+> **Status (October 2026):** this review describes the repository at `59ef445`. The issues listed
+> below were addressed in the subsequent commits on branch `claude/project-review-critique-wevctd`:
+> the code was rewritten (see the commit message of `360f519`), the fabricated or unsupported artifacts
+> were removed, the manuscript was rewritten in `paper/FINAL_SUBMISSION.tex` with every number generated
+> by `pimaluos report`, and the bibliography was rebuilt from verified entries (`paper/references.bib`).
+> The full Manhattan experiments still have to be run on the author's machine with MapPLUTO; until then
+> the manuscript shows **[TBD]** in place of results.
+
 **Manuscript:** "PIMALUOS: An Open-Source Physics-Informed Multi-Agent Framework for Urban Land-Use Optimization" (`FINAL_SUBMISSION.pdf`, byte-identical to the uploaded copy). Target journal: *Computers, Environment and Urban Systems* (CEUS).
 **Code reviewed:** `main` @ `59ef445`. I also checked the history, especially `667f077`, `167a341` and `78e3972`.
 **Reviewer stance:** this review is written the way a rigorous CEUS referee and a software-paper reproducibility auditor would read the submission. Every finding cites the file and line, or the committed artifact, it rests on.

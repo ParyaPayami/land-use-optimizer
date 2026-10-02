@@ -1,7 +1,7 @@
 # Full Manhattan experiment reported in the manuscript.
 # pimaluos run --config configs/paper.yaml --pluto <MapPLUTO .zip/.shp/.gdb> --out results/paper
 city: manhattan
-pluto_release: "24v4"   # set to the MapPLUTO release you downloaded
+pluto_release: null      # REQUIRED: the MapPLUTO release you downloaded, e.g. "26v1"
 seeds: [0, 1, 2, 3, 4]
 gnn: {epochs: 300, lr: 0.001, patience: 50, hidden_channels: 256, embed_dim: 128, heads: 4}
 edge_ablation: {enabled: true, seeds: [0, 1, 2], epochs: 150}

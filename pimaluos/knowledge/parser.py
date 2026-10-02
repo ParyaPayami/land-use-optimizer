@@ -1,10 +1,12 @@
 """
 Structured extraction of district-level bulk limits with RAG.
 
-For each zoning district the extractor asks the LLM for the *base* maximum
-residential, commercial and community-facility FAR (no bonuses), returning JSON
-validated with Pydantic. There are no built-in fallback values: if extraction
-fails, the fields are ``None`` and the failure is recorded.
+For each zoning district the extractor asks the LLM for the maximum residential,
+commercial and community-facility FAR excluding bonuses (for height-factor
+districts, the highest achievable value), matching the definition of MapPLUTO's
+ResidFAR/CommFAR/FacilFAR, and validates the JSON answer with Pydantic. There
+are no built-in fallback values: if extraction fails, the fields are ``None``
+and the failure is recorded.
 """
 
 from __future__ import annotations
@@ -21,8 +23,10 @@ SYSTEM_PROMPT = (
 )
 
 QUERY_TEMPLATE = (
-    "For zoning district {zone}, give the BASE maximum floor area ratio (FAR) without bonuses "
-    "for residential use, commercial use and community facility use. If a use is not permitted, use 0. "
+    "For zoning district {zone}, give the maximum floor area ratio (FAR) permitted for residential use, "
+    "commercial use and community facility use, excluding any bonuses (plazas, arcades, inclusionary or "
+    "other amenities). Where the residential FAR depends on height factor or open space ratio, give the "
+    "highest achievable value. If a use is not permitted, use 0. "
     'Return JSON: {{"zone": "{zone}", "max_residential_far": number|null, '
     '"max_commercial_far": number|null, "max_community_facility_far": number|null, '
     '"section": string|null}}'

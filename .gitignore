@@ -1,91 +1,47 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
-*$py.class
-
-# Virtual environments
-venv/
-env/
-.venv/
-
-# Distribution / packaging
+*.egg-info/
 build/
 dist/
-*.egg-info/
-*.egg
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
+.ipynb_checkpoints/
 
-# IDE
+# Editors / OS
 .vscode/
 .idea/
 *.swp
-*.swo
-
-# Environment variables (NEVER COMMIT)
-.env
-.env.local
-.env.*.local
-
-# Jupyter
-.ipynb_checkpoints/
-*.ipynb_checkpoints
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-coverage.xml
-
-# MyPy
-.mypy_cache/
-
-# Data files (large)
-data/
-!data/zoning_rag_benchmark.json
-*.geojson
-*.shp
-*.dbf
-*.shx
-*.prj
-
-# Model checkpoints
-*.pt
-*.pth
-checkpoints/
-
-# Node modules
-node_modules/
-.next/
-out/
-
-# OS
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
-logs/
+# Secrets
+.env
+.env.*
+!.env.example
 
-# Manuscript and academic content
-manuscript tex/
-manuscript tex.zip
-MANUSCRIPT_CHANGES.tex
-MANUSCRIPT_UPDATES.md
-Sources/
-*.bib
-docs/
-
-# Development iterations and experiments
-results/small_scale_demo/
-index.html
-*.backup
-*_old.py
-verify_edges.py
-download_manhattan_data*.py
-
-# PIMALUOS run outputs and data (large; archive on Zenodo instead)
+# Data, checkpoints and run outputs (large; archive on Zenodo instead)
 data/
+*.pt
+*.pth
 results/*
 !results/.gitkeep
 paper/generated/*
 !paper/generated/.gitkeep
-*.pt
+
+# LaTeX build files
+paper/*.aux
+paper/*.log
+paper/*.out
+paper/*.bbl
+paper/*.blg
+paper/*.fls
+paper/*.fdb_latexmk
+paper/*.spl
+paper/*.synctex.gz
+paper/FINAL_SUBMISSION.pdf
