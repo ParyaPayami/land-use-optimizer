@@ -35,3 +35,11 @@ def test_gini():
     assert gini(np.ones(5)) == 0.0
     assert np.isclose(gini(np.array([0, 0, 0, 1.0])), 0.75)
     assert np.isclose(gini(np.array([1.0, 3.0]), np.array([3.0, 1.0])), gini(np.array([1, 1, 1, 3.0])))
+
+
+def test_equal_heights_cast_no_shade(cap):
+    h = np.full(cap.n, 50.0)
+    noisy = h * (1 + 1e-15 * np.random.default_rng(0).standard_normal(cap.n))
+    for hh in (h, noisy):
+        shaded, cast = cap.shaded(hh)
+        assert not shaded.any() and not cast.any()

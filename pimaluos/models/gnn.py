@@ -179,6 +179,7 @@ def pretrain_gnn(
         torch.set_rng_state(ck["torch_rng"])
         if logger:
             logger.info("GNN resumed at epoch %d", start)
+    hist["resumed_from_epoch"] = start
     for ep in range(start, epochs):
         if resume_path is not None and ep > start and ep % ckpt_every == 0:
             tmp = f"{resume_path}.tmp"

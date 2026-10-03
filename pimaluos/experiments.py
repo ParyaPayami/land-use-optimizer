@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import platform
 import time
 from pathlib import Path
@@ -89,6 +90,20 @@ def _atomic_torch_save(obj, path: Path) -> None:
     tmp = path.with_name(path.name + ".tmp")
     torch.save(obj, tmp)
     tmp.replace(path)
+
+
+def _hardware() -> Dict:
+    """CPU model, core count, memory and GPU availability, for the paper's computation note."""
+    cpu, mem = platform.processor() or platform.machine(), None
+    try:
+        info = Path("/proc/cpuinfo").read_text()
+        cpu = next(ln.split(":", 1)[1].strip() for ln in info.splitlines() if ln.startswith("model name"))
+        kb = next(int(ln.split()[1]) for ln in Path("/proc/meminfo").read_text().splitlines()
+                  if ln.startswith("MemTotal"))
+        mem = round(kb / 1024 ** 2, 1)
+    except (OSError, StopIteration, ValueError):
+        pass
+    return {"cpu_model": cpu, "cpu_count": os.cpu_count(), "memory_gb": mem, "cuda": torch.cuda.is_available()}
 
 def _json_default(o):
     if isinstance(o, (np.integer,)):
@@ -165,7 +180,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         "no_equity_agent": dict(use_gnn=True, physics_weight=1.0,
                                 agent_types=[a for a in AGENT_TYPES if a != "equity_advocate"]),
     }
-    timings["gnn_s"] = timings["marl_s"] = 0.0
+    timings.update(gnn_s=0.0, marl_s=0.0, gnn_epochs=0, marl_iters=0)
     ckpt_dir = out_dir / "checkpoints"
     ckpt_dir.mkdir(exist_ok=True)
 
@@ -180,11 +195,13 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 nash_out[seed] = done["nash"]
             if done.get("vote") is not None:
                 vote_out[seed] = done["vote"]
-            for k in ("gnn_s", "marl_s"):
-                timings[k] += done["timings"][k]
+            for k in ("gnn_s", "marl_s", "gnn_epochs", "marl_iters"):
+                timings[k] += done["timings"].get(k, 0)
             continue
         n_rows_before = len(rec.rows)
-        seed_t = {"gnn_s": 0.0, "marl_s": 0.0}
+        # Seconds and the epochs/iterations they cover (an interrupted stage counts only
+        # the work done after resuming, so the per-epoch rates stay exact).
+        seed_t = {"gnn_s": 0.0, "marl_s": 0.0, "gnn_epochs": 0, "marl_iters": 0}
         logger.info("=== seed %d ===", seed)
         # Stage checkpoints inside a seed, so an interrupted run loses at most one stage.
         gnn_ck = ckpt_dir / f"seed_{seed}_gnn.pt"
@@ -196,6 +213,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             sysm.gnn = model
             gnn_out[seed] = st["history"]
             seed_t["gnn_s"] = st["seconds"]
+            seed_t["gnn_epochs"] = st.get("epochs_trained", len(st["history"]["train_loss"]))
             logger.info("seed %d: GNN loaded from stage checkpoint", seed)
         else:
             t0 = time.time()
@@ -203,10 +221,12 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                                     patience=gnn_cfg.get("patience", 50),
                                     resume_path=str(ckpt_dir / f"seed_{seed}_gnn.partial.pt"))
             seed_t["gnn_s"] = time.time() - t0
+            seed_t["gnn_epochs"] = len(res["history"]["train_loss"]) - res["history"]["resumed_from_epoch"]
             gnn_out[seed] = res["history"]
             _atomic_torch_save({"state_dict": sysm.gnn.state_dict(), "history": res["history"],
-                        "seconds": seed_t["gnn_s"]}, gnn_ck)
+                                "seconds": seed_t["gnn_s"], "epochs_trained": seed_t["gnn_epochs"]}, gnn_ck)
         timings["gnn_s"] += seed_t["gnn_s"]
+        timings["gnn_epochs"] += seed_t["gnn_epochs"]
 
         # Baselines (deterministic except random).
         plans = {
@@ -229,22 +249,28 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 for a, m in tr.agents.items():
                     m.load_state_dict(st["agents"][a])
                 marl_out[seed][v], dt = st["history"], st["seconds"]
+                n_it = st.get("iterations_trained", len(st["history"]))
                 logger.info("seed %d: MARL variant %s loaded from stage checkpoint", seed, v)
             else:
                 t0 = time.time()
                 tr = sysm.train_marl(env, mcfg["iterations"], seed, ppo,
                                      resume_path=str(ckpt_dir / f"seed_{seed}_{v}.partial.pt"))
                 dt = time.time() - t0
+                n_it = mcfg["iterations"] - tr.resumed_from
                 marl_out[seed][v] = [
                     {"iteration": h["iteration"],
                      "returns": {a: h[a]["episode_return"] for a in spec["agent_types"]},
                      "entropy": {a: h[a]["entropy"] for a in spec["agent_types"]},
                      "added_floor_area_sqft": h["plan_summary"]["added_floor_area_sqft"]}
                     for h in tr.history]
+                # seconds covers only the iterations trained by this process.
                 _atomic_torch_save({"agents": {a: m.state_dict() for a, m in tr.agents.items()},
-                            "history": marl_out[seed][v], "seconds": dt}, v_ck)
+                                    "history": marl_out[seed][v], "seconds": dt,
+                                    "iterations_trained": n_it}, v_ck)
             seed_t["marl_s"] += dt
+            seed_t["marl_iters"] += n_it
             timings["marl_s"] += dt
+            timings["marl_iters"] += n_it
             trainers[v] = tr
             plans[v] = tr.final_plan()[0]
 
@@ -253,6 +279,9 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             vfar, hist = sysm.verify(far)
             s = cap.evaluate(vfar)["summary"]
             s["repair_iterations"] = len(hist) - 1
+            left = s["traffic_violations"] + s["catchments_over_capacity"] + s["lots_newly_shaded"]
+            if left:
+                logger.warning("seed %d %s: %d violations remain after repair", seed, name, left)
             rec.add(seed, name, True, s)
             if seed == seeds[0]:
                 np.savez_compressed(out_dir / "plans" / f"{name}.npz", far=far, far_verified=vfar)
@@ -288,7 +317,6 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
 
     # ------------------------------------------------------------ edge ablation
     if config["edge_ablation"]["enabled"]:
-        t0 = time.time()
         configs = {"all": ALL_EDGE_TYPES, "spatial_adjacency_only": ["spatial_adjacency"]}
         for et in ALL_EDGE_TYPES:
             configs[f"without_{et}"] = [e for e in ALL_EDGE_TYPES if e != et]
@@ -301,20 +329,22 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             for seed in config["edge_ablation"]["seeds"]:
                 if str(seed) in abl[name]["val_loss"]:
                     continue
+                ta = time.time()
                 h = sysm.pretrain_gnn(epochs=config["edge_ablation"]["epochs"], seed=seed, relations=rels,
                                       patience=gnn_cfg.get("patience", 50),
                                       resume_path=str(ckpt_dir / f"ablation_{name}_{seed}.partial.pt"))["history"]
                 abl[name]["val_loss"][str(seed)] = h["best_val_loss"]
+                abl[name].setdefault("seconds", {})[str(seed)] = time.time() - ta
                 if name == "no_graph":
                     abl.setdefault("mean_predictor", {"edge_types": [], "val_loss": {}})
                     abl["mean_predictor"]["val_loss"][str(seed)] = h["mean_predictor_val_loss"]
                 _atomic_write_text(abl_ck, json.dumps(abl, indent=1))
         (out_dir / "edge_ablation.json").write_text(json.dumps(abl, indent=1))
-        timings["edge_ablation_s"] = time.time() - t0
+        # Summed per run so that time spent before an interruption is counted.
+        timings["edge_ablation_s"] = float(sum(sum(v.get("seconds", {}).values()) for v in abl.values()))
 
     # ------------------------------------------------------------ Pareto
     if config["pareto"]["enabled"]:
-        t0 = time.time()
         pc = config["pareto"]
         seed0_plans = {k: np.load(out_dir / "plans" / f"{k}.npz") for k in ["pimaluos", "zoning_buildout"]
                        if (out_dir / "plans" / f"{k}.npz").exists()}
@@ -330,16 +360,18 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             for mode, sp in [("cold", None), ("seeded", seeds_for_init)]:
                 if mode in par[str(seed)]:
                     continue
+                tp = time.time()
                 r = run_nsga3(cap, pc["pop_size"], pc["generations"], pc["n_partitions"], seed, sp)
                 knee_far = r["far"][r["knee"]]
                 par[str(seed)][mode] = {"F": r["F"].tolist(), "knee": r["knee"], "hv": r["hv_history"],
                                    "knee_summary": cap.evaluate(knee_far)["summary"],
-                                        "n_solutions": int(len(r["F"])), "n_ref_dirs": r["n_ref_dirs"]}
+                                        "n_solutions": int(len(r["F"])), "n_ref_dirs": r["n_ref_dirs"],
+                                        "seconds": time.time() - tp}
                 _atomic_write_text(par_ck, json.dumps(par, default=_json_default))
                 if seed == pc["seeds"][0]:
                     np.savez_compressed(out_dir / "plans" / f"pareto_knee_{mode}.npz", far=knee_far)
         (out_dir / "pareto.json").write_text(json.dumps(par, default=_json_default))
-        timings["pareto_s"] = time.time() - t0
+        timings["pareto_s"] = float(sum(e.get("seconds", 0.0) for v in par.values() for e in v.values()))
 
     timings["total_s"] = time.time() - t_start
     manifest = {
@@ -352,6 +384,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         "timings": timings,
         "environment": {"python": platform.python_version(), "torch": torch.__version__,
                         "platform": platform.platform(), "processor": platform.processor(),
+                        **_hardware(),
                         "threads": torch.get_num_threads()},
         "finished": time.strftime("%Y-%m-%d %H:%M:%S"),
     }

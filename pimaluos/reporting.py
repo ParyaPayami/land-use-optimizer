@@ -46,7 +46,8 @@ MACROS = [
     # budgets
     "GnnPatience", "MarlIters", "MarlHorizon", "AblEpochs",
     # timings / hardware
-    "TimeTotalH", "TimeGnnMin", "TimeMarlMin", "TimeParetoMin", "TimeGraphS", "Hardware", "TorchVersion",
+    "TimeTotalH", "GnnSecPerEpoch", "MarlSecPerIter", "AblMinPerConfig", "ParetoMinPerRun", "TimeGraphS",
+    "Hardware", "TorchVersion",
     # RAG
     "RagProvider", "RagDistricts", "RagAccOverall", "RagAccCI", "RagAccResid", "RagAccComm", "RagAccFacil",
     "RagCoverage", "RagParseFail", "RagRefAgreement", "RagChunks",
@@ -59,6 +60,42 @@ def _fmt(x, nd=2):
     if isinstance(x, (int, np.integer)):
         return f"{int(x):,}".replace(",", "{,}")
     return f"{x:,.{nd}f}".replace(",", "{,}")
+
+
+def _rate(t: Dict, seconds: str, count: Optional[str], n: Optional[int] = None) -> float:
+    n = t.get(count, 0) if count else n
+    return t[seconds] / n if n and t.get(seconds) else np.nan
+
+
+def _n_abl_runs(abl) -> int:
+    return sum(len(v.get("val_loss", {})) for k, v in (abl or {}).items() if k != "mean_predictor")
+
+
+def _n_pareto_runs(pareto) -> int:
+    return sum(len(v) for v in (pareto or {}).values())
+
+
+def _compute_hours(t: Dict, config: Dict) -> float:
+    """Total computation in hours. Stages interrupted and resumed count only the work
+    done after resuming, so multi-agent training is the measured seconds per iteration
+    times the iterations the configuration requires."""
+    marl = _rate(t, "marl_s", "marl_iters") * len(config["seeds"]) * len(config["variants"]) \
+        * config["marl"]["iterations"]
+    keys = ("data_s", "graph_s", "gnn_s", "edge_ablation_s", "pareto_s")
+    if not np.isfinite(marl) or any(k not in t for k in keys):
+        return t.get("total_s", np.nan) / 3600
+    return (sum(t[k] for k in keys) + marl) / 3600
+
+
+def _hardware_text(env: Dict) -> str:
+    if env.get("cpu_count"):
+        txt = f"{env['cpu_count']} CPU cores ({env['cpu_model']})"
+        if env.get("memory_gb"):
+            txt += f" with {env['memory_gb']:g} GB memory"
+        txt += ", using the GPU" if env.get("cuda") else ", no GPU"
+    else:
+        txt = env.get("processor") or env["platform"]
+    return txt.replace("_", r"\_").replace("(R)", "").replace("@", "at")
 
 
 def _pm(vals, nd=2, scale=1.0):
@@ -359,10 +396,13 @@ def make_report(results: Path, out: Path, rag_dir: Optional[Path] = None) -> Dic
                  AblEpochs=_fmt(man["config"]["edge_ablation"].get("epochs")),
                  ParetoPop=_fmt(man["config"]["pareto"]["pop_size"]),
                  ParetoGen=_fmt(man["config"]["pareto"]["generations"]),
-                 TimeTotalH=_fmt(t.get("total_s", np.nan) / 3600, 1), TimeGnnMin=_fmt(t.get("gnn_s", np.nan) / 60, 1),
-                 TimeMarlMin=_fmt(t.get("marl_s", np.nan) / 60, 1),
-                 TimeParetoMin=_fmt(t.get("pareto_s", np.nan) / 60, 1), TimeGraphS=_fmt(t.get("graph_s", np.nan), 0),
-                 Hardware=(man["environment"].get("processor") or man["environment"]["platform"]).replace("_", r"\_"),
+                 TimeTotalH=_fmt(_compute_hours(t, man["config"]), 1),
+                 GnnSecPerEpoch=_fmt(_rate(t, "gnn_s", "gnn_epochs"), 1),
+                 MarlSecPerIter=_fmt(_rate(t, "marl_s", "marl_iters"), 1),
+                 AblMinPerConfig=_fmt(_rate(t, "edge_ablation_s", None, n=_n_abl_runs(abl)) / 60, 1),
+                 ParetoMinPerRun=_fmt(_rate(t, "pareto_s", None, n=_n_pareto_runs(pareto)) / 60, 1),
+                 TimeGraphS=_fmt(t.get("graph_s", np.nan), 0),
+                 Hardware=_hardware_text(man["environment"]),
                  TorchVersion=man["environment"]["torch"].replace("_", r"\_"))
         table_features(man, out)
     if graph:

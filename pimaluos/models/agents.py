@@ -257,6 +257,7 @@ class MARLTrainer:
         self.agents = {a: StakeholderAgent(env.state_dim, a, self.cfg.hidden) for a in env.agent_types}
         self.opts = {a: torch.optim.Adam(m.parameters(), lr=self.cfg.lr) for a, m in self.agents.items()}
         self.history: List[Dict] = []
+        self.resumed_from = 0
 
     def _rollout(self):
         env = self.env
@@ -344,6 +345,7 @@ class MARLTrainer:
             torch.set_rng_state(ck["torch_rng"])
             if logger:
                 logger.info("MARL resumed at iteration %d", start)
+        self.resumed_from = start
         for it in range(start, iterations):
             if resume_path is not None and it > start and it % ckpt_every == 0:
                 tmp = f"{resume_path}.tmp"

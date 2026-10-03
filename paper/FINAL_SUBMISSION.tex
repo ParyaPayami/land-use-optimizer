@@ -256,8 +256,7 @@ Zoning Resolution text \cite{nyc_zr} matching the MapPLUTO release is split into
 
 \paragraph{Seeds and statistics} The GNN and all learned plans are run with \NSeeds{} seeds; edge-type ablations with \NSeedsAbl{} (up to \AblEpochs{} epochs each); NSGA-III with \NSeedsPareto{}. We report mean $\pm$ standard deviation across seeds. Seeds, not lots, are the independent replicates, so we do not apply lot-level significance tests.
 
-\paragraph{Computation} All experiments ran on \Hardware{} with PyTorch \TorchVersion{}: graph construction \TimeGraphS{}~s, GNN pre-training \TimeGnnMin{}~min, multi-agent training \TimeMarlMin{}~min and NSGA-III \TimeParetoMin{}~min in total, \TimeTotalH{}~h end to end.
-\AuthorNote{Replace \texttt{\textbackslash Hardware} with a readable machine description (e.g.\ ``an Apple M3 Pro laptop with 18\,GB memory, CPU only'') if the platform string is not informative.}
+\paragraph{Computation} All experiments ran on \Hardware{} with PyTorch \TorchVersion{}. Building the graph takes \TimeGraphS{}~s; one GNN pre-training epoch \GnnSecPerEpoch{}~s; one PPO iteration \MarlSecPerIter{}~s on average over the five variants; one edge-ablation configuration \AblMinPerConfig{}~min; and one NSGA-III run \ParetoMinPerRun{}~min. The full run amounts to about \TimeTotalH{}~h of computation. It was executed in resumable segments: training state is checkpointed every 10 GNN epochs and every 5 PPO iterations, and an interrupted stage resumes bit-for-bit (tested in the package).
 
 %% ===========================================================================
 \section{Results}

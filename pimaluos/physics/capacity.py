@@ -30,7 +30,9 @@ Hydrology (Rational Method screen)
 
 Solar access (winter-solstice noon screen)
     Shadow length L = H / tan(altitude). Lot j is shaded by lot i if j lies north
-    of i within L, overlaps i's east-west extent, and H_i > H_j. Candidate pairs
+    of i within L, overlaps i's east-west extent, and H_i > H_j + 0.01 ft (the
+    margin keeps floating-point noise between equal heights from counting as
+    shade). Candidate pairs
     are the ``shadow_k`` nearest lots. Reported: lots newly shaded relative to
     existing conditions.
 
@@ -61,6 +63,10 @@ DEFAULT_PERVIOUS_C = {  # runoff coefficient of the unbuilt part of the lot
     "open_space": 0.20, "vacant": 0.40, "parking": 0.90,
 }
 
+
+# Height margin for casting shade: equal heights computed along different arithmetic
+# paths (e.g. far / (far / floors)) can differ by ~1e-13 ft.
+SHADE_TOL_FT = 0.01
 
 @dataclass
 class CapacityParams:
@@ -261,7 +267,7 @@ class CapacityModel:
         """Boolean per lot: shaded at winter-solstice noon; and per-lot shadow count cast."""
         hi, hj = height[self.pair_i], height[self.pair_j]
         length = hi / self.tan_alt
-        cast = (hi > hj) & (self.pair_dy <= length)
+        cast = (hi > hj + SHADE_TOL_FT) & (self.pair_dy <= length)
         shaded = np.zeros(self.n, dtype=bool)
         shaded[self.pair_j[cast]] = True
         return shaded, cast
