@@ -1,0 +1,113 @@
+{
+ "all": {
+  "edge_types": [
+   "spatial_adjacency",
+   "proximity",
+   "functional_similarity",
+   "street_frontage",
+   "regulatory_coupling"
+  ],
+  "val_loss": {
+   "0": 0.4781672954559326
+  },
+  "seconds": {
+   "0": 1245.885
+  }
+ },
+ "spatial_adjacency_only": {
+  "edge_types": [
+   "spatial_adjacency"
+  ],
+  "val_loss": {
+   "0": 0.7015271782875061
+  },
+  "seconds": {
+   "0": 168.338
+  }
+ },
+ "without_spatial_adjacency": {
+  "edge_types": [
+   "proximity",
+   "functional_similarity",
+   "street_frontage",
+   "regulatory_coupling"
+  ],
+  "val_loss": {
+   "0": 0.4780848026275635
+  },
+  "seconds": {
+   "0": 1023.0
+  }
+ },
+ "without_proximity": {
+  "edge_types": [
+   "spatial_adjacency",
+   "functional_similarity",
+   "street_frontage",
+   "regulatory_coupling"
+  ],
+  "val_loss": {
+   "0": 0.4776383638381958
+  },
+  "seconds": {
+   "0": 799.952
+  }
+ },
+ "without_functional_similarity": {
+  "edge_types": [
+   "spatial_adjacency",
+   "proximity",
+   "street_frontage",
+   "regulatory_coupling"
+  ],
+  "val_loss": {
+   "0": 0.64809250831604
+  },
+  "seconds": {
+   "0": 1024.488
+  }
+ },
+ "without_street_frontage": {
+  "edge_types": [
+   "spatial_adjacency",
+   "proximity",
+   "functional_similarity",
+   "regulatory_coupling"
+  ],
+  "val_loss": {
+   "0": 0.4772564768791199
+  },
+  "seconds": {
+   "0": 994.198
+  }
+ },
+ "without_regulatory_coupling": {
+  "edge_types": [
+   "spatial_adjacency",
+   "proximity",
+   "functional_similarity",
+   "street_frontage"
+  ],
+  "val_loss": {
+   "0": 0.49065476655960083
+  },
+  "seconds": {
+   "0": 890.856
+  }
+ },
+ "no_graph": {
+  "edge_types": [],
+  "val_loss": {
+   "0": 1.0156103372573853
+  },
+  "seconds": {
+   "0": 43.131
+  }
+ },
+ "mean_predictor": {
+  "edge_types": [],
+  "val_loss": {
+   "0": 1.015580415725708
+  }
+ }
+}

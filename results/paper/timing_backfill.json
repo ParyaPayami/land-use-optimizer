@@ -1,0 +1,27 @@
+{
+ "source": "logs/first_run/segment_01-04.log (first full run) and checkpoint mtimes",
+ "gnn": {
+  "0": {
+   "seconds": 2447.9069998264313,
+   "epochs_trained": 150
+  },
+  "1": {
+   "seconds": 2402.75621509552,
+   "epochs_trained": 150
+  },
+  "2": {
+   "seconds": 2437.194005727768,
+   "epochs_trained": 150
+  }
+ },
+ "edge_ablation_s": {
+  "all": 1245.885,
+  "spatial_adjacency_only": 168.338,
+  "without_spatial_adjacency": 1023.0,
+  "without_proximity": 799.952,
+  "without_functional_similarity": 1024.488,
+  "without_street_frontage": 994.198,
+  "without_regulatory_coupling": 890.856,
+  "no_graph": 43.131
+ }
+}

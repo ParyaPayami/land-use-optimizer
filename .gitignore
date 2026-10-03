@@ -31,8 +31,14 @@ data/
 *.pth
 results/*
 !results/.gitkeep
-paper/generated/*
-!paper/generated/.gitkeep
+# The paper's run: small summaries and logs are versioned; checkpoints and plans are not.
+!results/paper/
+results/paper/*
+!results/paper/*.json
+!results/paper/metrics.csv
+!results/paper/logs/
+!results/paper/logs/**
+# Generated paper assets are versioned so the manuscript compiles with the reported results.
 
 # LaTeX build files
 paper/*.aux

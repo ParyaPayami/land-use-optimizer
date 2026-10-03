@@ -40,7 +40,7 @@ from pimaluos.core.graph_builder import ALL_EDGE_TYPES, RELATION_NAMES
 from pimaluos.models.agents import AGENT_TYPES, MARLTrainer, PPOConfig
 from pimaluos.models.gnn import ParcelGNN
 from pimaluos.models.nash import analyse_consensus
-from pimaluos.models.pareto import run_nsga3
+from pimaluos.models.pareto import normalisation, plan_objectives, run_nsga3
 from pimaluos.physics.capacity import CapacityParams
 from pimaluos.pipeline import UrbanOptSystem
 
@@ -370,6 +370,22 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 _atomic_write_text(par_ck, json.dumps(par, default=_json_default))
                 if seed == pc["seeds"][0]:
                     np.savez_compressed(out_dir / "plans" / f"pareto_knee_{mode}.npz", far=knee_far)
+        # Is each first-seed plan dominated by a front, and how many front plans lie inside the
+        # hypervolume reference box (hypervolume is zero when none do)?
+        ref, _ = normalisation(cap)
+        compare = {}
+        if "pimaluos" in seed0_plans:
+            compare.update(pimaluos=seed0_plans["pimaluos"]["far"],
+                           pimaluos_verified=seed0_plans["pimaluos"]["far_verified"])
+        if "zoning_buildout" in seed0_plans:
+            compare["zoning_buildout_verified"] = seed0_plans["zoning_buildout"]["far_verified"]
+        f_plans = {k: plan_objectives(cap, f) for k, f in compare.items()}
+        for runs in par.values():
+            for e in runs.values():
+                F = np.asarray(e["F"])
+                e["n_in_reference_box"] = int((F <= ref).all(axis=1).sum())
+                e["dominates_plan"] = {k: bool(((F <= f).all(axis=1) & (F < f).any(axis=1)).any())
+                                       for k, f in f_plans.items()}
         (out_dir / "pareto.json").write_text(json.dumps(par, default=_json_default))
         timings["pareto_s"] = float(sum(e.get("seconds", 0.0) for v in par.values() for e in v.values()))
 

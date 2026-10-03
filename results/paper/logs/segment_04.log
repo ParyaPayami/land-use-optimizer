@@ -1,0 +1,12 @@
+/tmp/claude-0/-home-user-land-use-optimizer/55a57e04-5bce-5ab2-9230-31fff4b670d2/scratchpad/venv/lib/python3.11/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+2026-10-03 12:30:38,208 pimaluos.core.data_loader Dropping 5 constant features: ['historic_district', 'irregular_lot', 'landmark', 'special_district', 'split_zone']
+2026-10-03 12:30:44,998 pimaluos.core.graph_builder spatial_adjacency: 154834 directed edges
+2026-10-03 12:30:45,254 pimaluos.core.graph_builder proximity: 383320 directed edges
+2026-10-03 12:30:45,374 pimaluos.core.graph_builder functional_similarity: 156872 directed edges
+2026-10-03 12:30:45,734 pimaluos.core.graph_builder street_frontage: 100170 directed edges
+2026-10-03 12:30:45,846 pimaluos.core.graph_builder regulatory_coupling: 248310 directed edges
+2026-10-03 12:30:46,393 pimaluos.experiments === seed 0: loaded from checkpoint ===
+2026-10-03 12:30:46,396 pimaluos.experiments === seed 1: loaded from checkpoint ===
+2026-10-03 12:30:46,398 pimaluos.experiments === seed 2: loaded from checkpoint ===
+2026-10-03 12:49:11,126 pimaluos.experiments All experiments finished in 1126.7 s -> results/paper

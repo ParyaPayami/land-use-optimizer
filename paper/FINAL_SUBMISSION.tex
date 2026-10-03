@@ -256,7 +256,7 @@ Zoning Resolution text \cite{nyc_zr} matching the MapPLUTO release is split into
 
 \paragraph{Seeds and statistics} The GNN and all learned plans are run with \NSeeds{} seeds; edge-type ablations with \NSeedsAbl{} (up to \AblEpochs{} epochs each); NSGA-III with \NSeedsPareto{}. We report mean $\pm$ standard deviation across seeds. Seeds, not lots, are the independent replicates, so we do not apply lot-level significance tests.
 
-\paragraph{Computation} All experiments ran on \Hardware{} with PyTorch \TorchVersion{}. Building the graph takes \TimeGraphS{}~s; one GNN pre-training epoch \GnnSecPerEpoch{}~s; one PPO iteration \MarlSecPerIter{}~s on average over the five variants; one edge-ablation configuration \AblMinPerConfig{}~min; and one NSGA-III run \ParetoMinPerRun{}~min. The full run amounts to about \TimeTotalH{}~h of computation. It was executed in resumable segments: training state is checkpointed every 10 GNN epochs and every 5 PPO iterations, and an interrupted stage resumes bit-for-bit (tested in the package).
+\paragraph{Computation} All experiments ran on \Hardware{}, using PyTorch \TorchVersion{}. Building the graph takes \TimeGraphS{}~s; one GNN pre-training epoch \GnnSecPerEpoch{}~s; one PPO iteration \MarlSecPerIter{}~s on average over the five variants; one edge-ablation configuration \AblMinPerConfig{}~min; and one NSGA-III run \ParetoMinPerRun{}~min. The full run amounts to about \TimeTotalH{}~h of computation. It was executed in resumable segments: training state is checkpointed every 10 GNN epochs and every 5 PPO iterations, and an interrupted stage resumes bit-for-bit (tested in the package).
 
 %% ===========================================================================
 \section{Results}
@@ -353,7 +353,7 @@ Developer weight & Added FA (M sq\,ft) & Traffic viol. & Newly shaded \\
 
 \subsection{Many-objective search}
 NSGA-III returns \ParetoNCold{} (cold) and \ParetoNSeeded{} (seeded) non-dominated plans, with final normalised hypervolume \HVCold{} and \HVSeeded{} respectively (Fig.~\ref{fig:hv}). The seeded knee adds \KneeSeededAddedFAM{} million sq\,ft and newly shades \KneeSeededShaded{} lots.
-\AuthorNote{After running: state whether seeding with the multi-agent plan improves hypervolume within the generation budget, and how the PIMALUOS plan sits relative to the fronts in Fig.~\ref{fig:tradeoff} (dominated or not).}
+Seeding is decisive at this scale. From uniformly random starts, every non-dominated plan after \ParetoGen{} generations newly shades far more lots than even the full build-out, so none lies inside the hypervolume reference box (\ParetoColdInBox{} plans over all seeds) and the cold-start hypervolume is zero: with one decision variable per lot, random increments everywhere create shadow conflicts that the search does not undo within the budget. Seeded with the multi-agent and repaired plans, NSGA-III starts inside the box and improves the hypervolume over the generations (Fig.~\ref{fig:hv}); its knee adds less floor area than the repaired PIMALUOS plan and newly shades lots that the repaired plan leaves unshaded, so it is preferable only on the remaining objectives. Against the first seed's plans, the unrepaired PIMALUOS plan is dominated by the seeded front in \ParetoDomPim{} runs, while the repaired PIMALUOS plan (\ParetoDomPimVer{}) and the repaired build-out (\ParetoDomBuildoutVer{}) are never dominated: repair moves the agents' plan onto the front rather than leaving it inside.
 
 \begin{figure}[t]
 \centering
@@ -412,7 +412,7 @@ pimaluos report --results results/paper \
 %% ===========================================================================
 
 PIMALUOS is an open, tested and fully reproducible framework that links parcel data, stakeholder agents and infrastructure screens for lot-level floor-area planning. On Manhattan it produces verified plans whose costs and trade-offs relative to single-objective and many-objective baselines are reported transparently, across seeds and ablations.
-\AuthorNote{After running, add one sentence summarising the main quantitative finding, in the direction the results support.}
+On all of Manhattan, capacity feedback and the stakeholder vote roughly halve traffic violations before repair compared with a single planner or agents without feedback, the repaired consensus plan is non-dominated in the many-objective comparison, and it retains about a third less floor area than a capacity-aware greedy (\PimVsBuildoutVerPct{}\,\%), the price of representing five stakeholders; graph embeddings change where floor area goes but not how much survives verification.
 
 %% ===========================================================================
 \section*{Data and code availability}

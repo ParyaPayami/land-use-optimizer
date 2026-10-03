@@ -1,0 +1,28 @@
+{
+ "n_nodes": 42023,
+ "edge_types": {
+  "spatial_adjacency": {
+   "directed": 154834,
+   "undirected": 77417
+  },
+  "proximity": {
+   "directed": 383320,
+   "undirected": 191660
+  },
+  "functional_similarity": {
+   "directed": 156872,
+   "undirected": 78436
+  },
+  "street_frontage": {
+   "directed": 100170,
+   "undirected": 50085
+  },
+  "regulatory_coupling": {
+   "directed": 248310,
+   "undirected": 124155
+  }
+ },
+ "total_directed": 1043506,
+ "total_undirected": 521753,
+ "isolated_nodes": 4
+}

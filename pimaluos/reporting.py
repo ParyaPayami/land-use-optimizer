@@ -42,7 +42,8 @@ MACROS = [
     "NashMedianPoA", "NashPoaDefined", "NashMeanNE",
     # Pareto
     "ParetoPop", "ParetoGen", "ParetoRefDirs", "ParetoNCold", "ParetoNSeeded", "HVCold", "HVSeeded",
-    "KneeSeededAddedFAM", "KneeSeededShaded",
+    "KneeSeededAddedFAM", "KneeSeededShaded", "ParetoColdInBox", "ParetoDomPim", "ParetoDomPimVer",
+    "ParetoDomBuildoutVer",
     # budgets
     "GnnPatience", "MarlIters", "MarlHorizon", "AblEpochs",
     # timings / hardware
@@ -475,7 +476,13 @@ def make_report(results: Path, out: Path, rag_dir: Optional[Path] = None) -> Dic
                  ParetoNSeeded=_pm([p["seeded"]["n_solutions"] for p in P], 0),
                  HVCold=_pm([p["cold"]["hv"][-1] for p in P], 3), HVSeeded=_pm([p["seeded"]["hv"][-1] for p in P], 3),
                  KneeSeededAddedFAM=_pm([p["seeded"]["knee_summary"]["added_floor_area_sqft"] for p in P], 2, 1e-6),
-                 KneeSeededShaded=_pm([p["seeded"]["knee_summary"]["lots_newly_shaded"] for p in P], 0))
+                 KneeSeededShaded=_pm([p["seeded"]["knee_summary"]["lots_newly_shaded"] for p in P], 0),
+                 ParetoColdInBox=_fmt(int(sum(p["cold"].get("n_in_reference_box", 0) for p in P)))
+                 if all("n_in_reference_box" in p["cold"] for p in P) else TBD)
+        for key, plan in [("ParetoDomPim", "pimaluos"), ("ParetoDomPimVer", "pimaluos_verified"),
+                          ("ParetoDomBuildoutVer", "zoning_buildout_verified")]:
+            d = [p["seeded"].get("dominates_plan", {}).get(plan) for p in P]
+            v[key] = f"{sum(map(bool, d))} of {len(d)}" if all(x is not None for x in d) else TBD
         fig_hv(pareto, out)
     fig_map(results, out)
 

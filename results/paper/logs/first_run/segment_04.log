@@ -1,0 +1,63 @@
+/tmp/claude-0/-home-user-land-use-optimizer/55a57e04-5bce-5ab2-9230-31fff4b670d2/scratchpad/venv/lib/python3.11/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+2026-10-03 05:37:45,666 pimaluos.core.data_loader Dropping 5 constant features: ['historic_district', 'irregular_lot', 'landmark', 'special_district', 'split_zone']
+2026-10-03 05:37:52,258 pimaluos.core.graph_builder spatial_adjacency: 154834 directed edges
+2026-10-03 05:37:52,487 pimaluos.core.graph_builder proximity: 383320 directed edges
+2026-10-03 05:37:52,592 pimaluos.core.graph_builder functional_similarity: 156872 directed edges
+2026-10-03 05:37:52,932 pimaluos.core.graph_builder street_frontage: 100170 directed edges
+2026-10-03 05:37:53,026 pimaluos.core.graph_builder regulatory_coupling: 248310 directed edges
+2026-10-03 05:37:53,488 pimaluos.experiments === seed 0: loaded from checkpoint ===
+2026-10-03 05:37:53,491 pimaluos.experiments === seed 1: loaded from checkpoint ===
+2026-10-03 05:37:53,491 pimaluos.experiments === seed 2 ===
+2026-10-03 05:37:53,564 pimaluos.experiments seed 2: GNN loaded from stage checkpoint
+2026-10-03 05:37:56,990 pimaluos.experiments seed 2: MARL variant pimaluos loaded from stage checkpoint
+2026-10-03 05:37:58,057 pimaluos.experiments seed 2: MARL variant no_gnn loaded from stage checkpoint
+2026-10-03 05:38:02,190 pimaluos.experiments seed 2: MARL variant no_capacity_feedback loaded from stage checkpoint
+2026-10-03 05:38:06,650 pimaluos.experiments seed 2: MARL variant single_agent_planner loaded from stage checkpoint
+2026-10-03 05:38:10,208 pimaluos.pipeline MARL resumed at iteration 35
+2026-10-03 05:38:27,775 pimaluos.pipeline MARL it 35 returns {'resident': 0.2789, 'developer': 0.0679, 'planner': 1.6642, 'environmentalist': -0.1974} added_fa 624465179
+2026-10-03 05:39:48,027 pimaluos.pipeline MARL it 40 returns {'resident': 0.2681, 'developer': 0.0757, 'planner': 1.6517, 'environmentalist': -0.1903} added_fa 620875418
+2026-10-03 05:41:08,136 pimaluos.pipeline MARL it 45 returns {'resident': 0.2671, 'developer': 0.0755, 'planner': 1.5912, 'environmentalist': -0.1874} added_fa 604755715
+2026-10-03 05:42:28,173 pimaluos.pipeline MARL it 50 returns {'resident': 0.272, 'developer': 0.0765, 'planner': 1.611, 'environmentalist': -0.186} added_fa 594345308
+2026-10-03 05:43:45,398 pimaluos.pipeline MARL it 55 returns {'resident': 0.273, 'developer': 0.0778, 'planner': 1.6162, 'environmentalist': -0.1858} added_fa 594075435
+2026-10-03 05:44:48,117 pimaluos.pipeline MARL it 59 returns {'resident': 0.2641, 'developer': 0.0789, 'planner': 1.5983, 'environmentalist': -0.1839} added_fa 602992311
+2026-10-03 05:45:24,366 pimaluos.pipeline GNN epoch 0 train 1.1062 val 0.9397
+2026-10-03 05:52:09,532 pimaluos.pipeline GNN epoch 25 train 0.5393 val 0.5333
+2026-10-03 05:58:43,692 pimaluos.pipeline GNN epoch 50 train 0.5232 val 0.4882
+2026-10-03 06:04:50,595 pimaluos.pipeline GNN epoch 75 train 0.5141 val 0.4786
+2026-10-03 06:05:48,885 pimaluos.pipeline GNN epoch 79 train 0.5218 val 0.4782
+2026-10-03 06:05:51,124 pimaluos.pipeline GNN epoch 0 train 1.1375 val 0.9860
+2026-10-03 06:06:44,164 pimaluos.pipeline GNN epoch 25 train 0.7102 val 0.7282
+2026-10-03 06:07:36,736 pimaluos.pipeline GNN epoch 50 train 0.7247 val 0.7065
+2026-10-03 06:08:28,798 pimaluos.pipeline GNN epoch 75 train 0.7301 val 0.7018
+2026-10-03 06:08:37,223 pimaluos.pipeline GNN epoch 79 train 0.7372 val 0.7015
+2026-10-03 06:08:53,022 pimaluos.pipeline GNN epoch 0 train 1.1176 val 0.9386
+2026-10-03 06:14:21,843 pimaluos.pipeline GNN epoch 25 train 0.5398 val 0.5346
+2026-10-03 06:19:37,082 pimaluos.pipeline GNN epoch 50 train 0.5205 val 0.4882
+2026-10-03 06:24:50,354 pimaluos.pipeline GNN epoch 75 train 0.5160 val 0.4786
+2026-10-03 06:25:40,223 pimaluos.pipeline GNN epoch 79 train 0.5233 val 0.4781
+2026-10-03 06:25:49,963 pimaluos.pipeline GNN epoch 0 train 1.1157 val 0.9390
+2026-10-03 06:29:55,834 pimaluos.pipeline GNN epoch 25 train 0.5398 val 0.5346
+2026-10-03 06:34:07,846 pimaluos.pipeline GNN epoch 50 train 0.5237 val 0.4878
+2026-10-03 06:38:19,076 pimaluos.pipeline GNN epoch 75 train 0.5133 val 0.4781
+2026-10-03 06:39:00,175 pimaluos.pipeline GNN epoch 79 train 0.5232 val 0.4776
+2026-10-03 06:39:14,904 pimaluos.pipeline GNN epoch 0 train 1.1162 val 0.9472
+2026-10-03 06:44:37,841 pimaluos.pipeline GNN epoch 25 train 0.6588 val 0.6770
+2026-10-03 06:49:57,394 pimaluos.pipeline GNN epoch 50 train 0.6623 val 0.6530
+2026-10-03 06:55:14,041 pimaluos.pipeline GNN epoch 75 train 0.6648 val 0.6484
+2026-10-03 06:56:04,663 pimaluos.pipeline GNN epoch 79 train 0.6714 val 0.6481
+2026-10-03 06:56:17,603 pimaluos.pipeline GNN epoch 0 train 1.1133 val 0.9369
+2026-10-03 07:01:40,079 pimaluos.pipeline GNN epoch 25 train 0.5396 val 0.5344
+2026-10-03 07:06:48,177 pimaluos.pipeline GNN epoch 50 train 0.5196 val 0.4875
+2026-10-03 07:11:48,650 pimaluos.pipeline GNN epoch 75 train 0.5118 val 0.4777
+2026-10-03 07:12:38,861 pimaluos.pipeline GNN epoch 79 train 0.5221 val 0.4773
+2026-10-03 07:12:49,195 pimaluos.pipeline GNN epoch 0 train 1.1139 val 0.9410
+2026-10-03 07:17:30,386 pimaluos.pipeline GNN epoch 25 train 0.5516 val 0.5460
+2026-10-03 07:22:12,238 pimaluos.pipeline GNN epoch 50 train 0.5335 val 0.5009
+2026-10-03 07:26:46,205 pimaluos.pipeline GNN epoch 75 train 0.5245 val 0.4912
+2026-10-03 07:27:29,717 pimaluos.pipeline GNN epoch 79 train 0.5361 val 0.4907
+2026-10-03 07:27:30,272 pimaluos.pipeline GNN epoch 0 train 1.1248 val 1.0720
+2026-10-03 07:27:43,867 pimaluos.pipeline GNN epoch 25 train 0.9773 val 1.0166
+2026-10-03 07:27:57,142 pimaluos.pipeline GNN epoch 50 train 1.0111 val 1.0158
+2026-10-03 07:28:10,854 pimaluos.pipeline GNN epoch 75 train 1.0257 val 1.0156
+2026-10-03 07:28:12,848 pimaluos.pipeline GNN epoch 79 train 1.0301 val 1.0156
