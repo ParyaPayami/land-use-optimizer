@@ -3,11 +3,11 @@
 # Data: NYC DCP MapPLUTO 26v2 (shoreline-clipped shapefile, nyc_mappluto_26v2_arc_shp.zip,
 #   sha256 38b518ff2f6ccc7e2824cac30cadaf15edc9d35933eb5eae0e10dab432774ecc), downloaded 2026-10-02 from
 #   https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/mappluto/nyc_mappluto_26v2_arc_shp.zip
-# Budgets are sized for a 4-core CPU (about 10 h); they are reported in the paper via generated macros.
+# Budgets are sized for a 4-core CPU (about 12 h); they are reported in the paper via generated macros.
 city: manhattan
 pluto_release: "26v2"
 seeds: [0, 1, 2]
-gnn: {epochs: 150, lr: 0.001, patience: 30, hidden_channels: 256, embed_dim: 128, heads: 4}
+gnn: {epochs: 500, lr: 0.001, patience: 500, hidden_channels: 256, embed_dim: 128, heads: 4}
 edge_ablation: {enabled: true, seeds: [0], epochs: 80}
 marl: {iterations: 60, horizon: 10, delta_far: 0.5}
 nash: {enabled: true, n_lots: 200}
