@@ -12,9 +12,9 @@
    "k_neighbors": 8
   },
   "gnn": {
-   "epochs": 150,
+   "epochs": 500,
    "lr": 0.001,
-   "patience": 30,
+   "patience": 500,
    "hidden_channels": 256,
    "embed_dim": 128,
    "heads": 4
@@ -200,26 +200,26 @@
   }
  },
  "timings": {
-  "data_s": 15.207229375839233,
-  "graph_s": 6.9279944896698,
-  "gnn_s": 7287.857220649719,
-  "marl_s": 14257.58545589447,
-  "gnn_epochs": 450,
-  "marl_iters": 845,
+  "data_s": 11.906245708465576,
+  "graph_s": 5.64992356300354,
+  "gnn_s": 5668.923261165619,
+  "marl_s": 11445.347445249557,
+  "gnn_epochs": 410,
+  "marl_iters": 860,
   "edge_ablation_s": 6189.848000000001,
-  "pareto_s": 2174.4107179641724,
-  "total_s": 22.790908098220825
+  "pareto_s": 1316.7578220367432,
+  "total_s": 6000.10916686058
  },
  "environment": {
   "python": "3.11.15",
   "torch": "2.14.1+cu130",
   "platform": "Linux-6.18.44-fc-v64-x86_64-with-glibc2.39",
   "processor": "x86_64",
-  "cpu_model": "Intel(R) Xeon(R) Processor @ 2.80GHz",
+  "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "cpu_count": 4,
   "memory_gb": 15.7,
   "cuda": false,
   "threads": 4
  },
- "finished": "2026-10-03 12:51:17"
+ "finished": "2026-10-04 02:36:46"
 }

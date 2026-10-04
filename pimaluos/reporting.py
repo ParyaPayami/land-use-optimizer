@@ -76,16 +76,19 @@ def _n_pareto_runs(pareto) -> int:
     return sum(len(v) for v in (pareto or {}).values())
 
 
-def _compute_hours(t: Dict, config: Dict) -> float:
+def _compute_hours(t: Dict, config: Dict, gnn: Optional[Dict] = None) -> float:
     """Total computation in hours. Stages interrupted and resumed count only the work
-    done after resuming, so multi-agent training is the measured seconds per iteration
-    times the iterations the configuration requires."""
-    marl = _rate(t, "marl_s", "marl_iters") * len(config["seeds"]) * len(config["variants"]) \
+    done after resuming, so GNN pre-training and multi-agent training are the measured
+    seconds per epoch/iteration times the epochs/iterations the run required."""
+    epochs = (sum(len(h["train_loss"]) for h in gnn.values()) if gnn
+              else len(config["seeds"]) * config["gnn"]["epochs"])
+    gnn_s = _rate(t, "gnn_s", "gnn_epochs") * epochs
+    marl_s = _rate(t, "marl_s", "marl_iters") * len(config["seeds"]) * len(config["variants"]) \
         * config["marl"]["iterations"]
-    keys = ("data_s", "graph_s", "gnn_s", "edge_ablation_s", "pareto_s")
-    if not np.isfinite(marl) or any(k not in t for k in keys):
+    keys = ("data_s", "graph_s", "edge_ablation_s", "pareto_s")
+    if not (np.isfinite(gnn_s) and np.isfinite(marl_s)) or any(k not in t for k in keys):
         return t.get("total_s", np.nan) / 3600
-    return (sum(t[k] for k in keys) + marl) / 3600
+    return (sum(t[k] for k in keys) + gnn_s + marl_s) / 3600
 
 
 def _hardware_text(env: Dict) -> str:
@@ -397,7 +400,7 @@ def make_report(results: Path, out: Path, rag_dir: Optional[Path] = None) -> Dic
                  AblEpochs=_fmt(man["config"]["edge_ablation"].get("epochs")),
                  ParetoPop=_fmt(man["config"]["pareto"]["pop_size"]),
                  ParetoGen=_fmt(man["config"]["pareto"]["generations"]),
-                 TimeTotalH=_fmt(_compute_hours(t, man["config"]), 1),
+                 TimeTotalH=_fmt(_compute_hours(t, man["config"], gnn), 1),
                  GnnSecPerEpoch=_fmt(_rate(t, "gnn_s", "gnn_epochs"), 1),
                  MarlSecPerIter=_fmt(_rate(t, "marl_s", "marl_iters"), 1),
                  AblMinPerConfig=_fmt(_rate(t, "edge_ablation_s", None, n=_n_abl_runs(abl)) / 60, 1),
