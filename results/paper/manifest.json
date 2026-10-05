@@ -27,7 +27,7 @@
    "epochs": 80
   },
   "marl": {
-   "iterations": 60,
+   "iterations": 200,
    "horizon": 10,
    "delta_far": 0.5,
    "ppo": {}
@@ -200,20 +200,20 @@
   }
  },
  "timings": {
-  "data_s": 11.906245708465576,
-  "graph_s": 5.64992356300354,
+  "data_s": 14.111650705337524,
+  "graph_s": 6.602223634719849,
   "gnn_s": 5668.923261165619,
-  "marl_s": 11445.347445249557,
+  "marl_s": 27035.113827228546,
   "gnn_epochs": 410,
-  "marl_iters": 860,
+  "marl_iters": 2435,
   "edge_ablation_s": 6189.848000000001,
-  "pareto_s": 1316.7578220367432,
-  "total_s": 6000.10916686058
+  "pareto_s": 1312.9581859111786,
+  "total_s": 2904.687418460846
  },
  "environment": {
   "python": "3.11.15",
   "torch": "2.14.1+cu130",
-  "platform": "Linux-6.18.44-fc-v64-x86_64-with-glibc2.39",
+  "platform": "Linux-6.18.44-fc-v70-x86_64-with-glibc2.39",
   "processor": "x86_64",
   "cpu_model": "Intel(R) Xeon(R) Processor @ 2.10GHz",
   "cpu_count": 4,
@@ -221,5 +221,5 @@
   "cuda": false,
   "threads": 4
  },
- "finished": "2026-10-04 02:36:46"
+ "finished": "2026-10-05 01:34:36"
 }
