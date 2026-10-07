@@ -37,9 +37,9 @@ def test_gnn_resume_is_exact(graph, tmp_path):
     assert res["val_loss"] == ref["val_loss"] and res["best_val_loss"] == ref["best_val_loss"]
 
 
-def test_marl_resume_is_exact(cap, ds, tmp_path):
+def test_marl_resume_is_exact(om, ds, tmp_path):
     def trainer():
-        env = MultiAgentEnvironment(cap, ds.features.values, horizon=3)
+        env = MultiAgentEnvironment(om, ds.features.values, horizon=3)
         return MARLTrainer(env, PPOConfig(minibatch=256), seed=0)
 
     ref = trainer()

@@ -29,3 +29,12 @@ def cap(ds):
 def _seed():
     np.random.seed(0)
     torch.manual_seed(0)
+
+
+@pytest.fixture(scope="session")
+def om(ds):
+    from pimaluos.context.build import synthetic_context
+    from pimaluos.outcomes import OutcomeModel
+    from pimaluos.physics import CapacityModel
+
+    return OutcomeModel(ds.gdf, CapacityModel(ds.gdf), synthetic_context(ds.gdf))

@@ -1,21 +1,28 @@
 """
-Many-objective search over FAR plans with NSGA-III (pymoo).
+Many-objective search over multi-use plans with NSGA-III (pymoo).
 
-Decision variables: the floor-area increment of each lot as a fraction of its
-headroom, x_i in [0, 1], FAR_i = far0_i + x_i (ub_i - far0_i).
+Decision variables: for every lot and use, the fraction of the lot's capacity
+for that use that is built, x[i, u] in [0, 1]; the plan is
+``ZoningEnvelope.clip(x * use_caps)`` (so the total and shared commercial caps
+always hold).
 
-Objectives (all minimised):
+Objectives (all minimised), two per pillar plus sunlight and displacement:
 
-1. -added floor area (sq ft)
-2. capacity exceedance = sum over cells of max(0, V/C - max(threshold, V/C_0))
-   + sum over catchments of max(0, utilisation - 1)
-3. lots newly shaded at winter-solstice noon
-4. added floor area on displacement-vulnerable residential lots (sq ft)
+1. - homes added                       (social)
+2. - affordable homes added            (social)
+3. - per-capita 15-minute access index (social)
+4. - jobs added                        (economic)
+5. - jobs-housing balance              (economic)
+6.   life-cycle carbon, 30 years       (environmental)
+7.   lots newly shaded                 (environmental)
+8.   floor area added on vulnerable lots (equity)
 
-``seed_plans`` lets the initial population include given plans (e.g. the MARL
-consensus plan, status quo, zoning build-out) with Gaussian perturbations; the
-remaining individuals are uniform random. Hypervolume per generation is
-recorded so cold-start and seeded runs can be compared.
+Constraint: traffic violations + sewer catchments over capacity <= 0.
+
+``seed_plans`` lets half of the initial population start from given plans
+(e.g. the multi-agent plan and repaired build-outs) with Gaussian
+perturbations; the rest is uniform random. Normalised hypervolume per
+generation is recorded so cold and seeded starts can be compared.
 """
 
 from __future__ import annotations
@@ -24,7 +31,7 @@ from typing import Dict, List, Optional
 
 import numpy as np
 
-from pimaluos.physics.capacity import CapacityModel
+from pimaluos.outcomes import OutcomeModel
 
 try:
     from pymoo.algorithms.moo.nsga3 import NSGA3
@@ -39,31 +46,36 @@ except ImportError:  # pragma: no cover
     Problem = object
     Callback = object
 
-OBJECTIVES = ["neg_added_floor_area", "capacity_exceedance", "lots_newly_shaded", "vulnerable_added_floor_area"]
+OBJECTIVES = ["neg_homes", "neg_affordable_homes", "neg_access_index", "neg_jobs", "neg_jobs_housing_balance",
+              "lifecycle_carbon_kt", "lots_newly_shaded", "vulnerable_lot_added_floor_area_sqft"]
+SIGN = np.array([-1, -1, -1, -1, -1, 1, 1, 1], dtype=float)
+KEYS = ["homes_added", "affordable_homes_added", "access_index", "jobs_added", "jobs_housing_balance",
+        "lifecycle_carbon_kt", "lots_newly_shaded", "vulnerable_lot_added_floor_area_sqft"]
 
 
-def plan_objectives(cap: CapacityModel, far: np.ndarray) -> np.ndarray:
-    r = cap.evaluate(far)
-    p = cap.p
-    vc0 = cap.baseline["vc_taz"]
-    traffic = np.maximum(0.0, r["vc_taz"] - np.maximum(p.vc_threshold, vc0)).sum()
-    sewer = np.maximum(0.0, r["sewer_util"] - 1.0).sum()
-    added = np.maximum(r["delta_floor_area"], 0)
-    return np.array([-added.sum(), traffic + sewer, float(r["new_shaded"].sum()),
-                     float(added[cap.vulnerable].sum())])
+def plan_objectives(om: OutcomeModel, plan: np.ndarray):
+    s = om.evaluate(plan)["summary"]
+    f = SIGN * np.array([s[k] for k in KEYS], dtype=float)
+    g = float(s["traffic_violations"] + s["catchments_over_capacity"])
+    return f, g
 
 
-class FARProblem(Problem):
-    def __init__(self, cap: CapacityModel):
-        self.cap = cap
-        self.head = cap.ub - cap.far0
-        super().__init__(n_var=cap.n, n_obj=4, xl=0.0, xu=1.0)
+class PlanProblem(Problem):
+    def __init__(self, om: OutcomeModel):
+        self.om = om
+        self.caps = om.env.use_caps()
+        super().__init__(n_var=om.n * 4, n_obj=len(KEYS), n_ieq_constr=1, xl=0.0, xu=1.0)
 
-    def to_far(self, x: np.ndarray) -> np.ndarray:
-        return self.cap.far0 + np.clip(x, 0, 1) * self.head
+    def to_plan(self, x: np.ndarray) -> np.ndarray:
+        return self.om.env.clip(np.clip(x, 0, 1).reshape(self.om.n, 4) * self.caps)
+
+    def to_x(self, plan: np.ndarray) -> np.ndarray:
+        return np.where(self.caps > 0, plan / np.maximum(self.caps, 1e-9), 0.0).clip(0, 1).ravel()
 
     def _evaluate(self, X, out, *args, **kwargs):
-        out["F"] = np.array([plan_objectives(self.cap, self.to_far(x)) for x in X])
+        res = [plan_objectives(self.om, self.to_plan(x)) for x in X]
+        out["F"] = np.array([r[0] for r in res])
+        out["G"] = np.array([[r[1]] for r in res])
 
 
 class _HVRecorder(Callback):
@@ -74,52 +86,58 @@ class _HVRecorder(Callback):
         self.values: List[float] = []
 
     def notify(self, algorithm):
-        F = algorithm.opt.get("F")
-        Fn = (F - self.ref) / self.scale + 1.0  # map to [0, ~1] relative to reference
+        opt = algorithm.opt
+        F = opt.get("F")
+        feas = opt.get("feasible").ravel() if opt.get("feasible") is not None else np.ones(len(F), bool)
+        Fn = (F[feas] - self.ref) / self.scale + 1.0
         Fn = Fn[(Fn <= 1.0).all(axis=1)]
         self.values.append(float(self.hv(Fn)) if len(Fn) else 0.0)
 
 
-def normalisation(cap: CapacityModel):
-    """Reference (worst) and scale for hypervolume, from status quo and build-out."""
-    sq = plan_objectives(cap, cap.far0)
-    bo = plan_objectives(cap, cap.ub)
-    worst = np.maximum(sq, bo)
-    best = np.minimum(sq, bo)
+def normalisation(om: OutcomeModel, plans: List[np.ndarray]):
+    """Reference (worst) point and scale for hypervolume, from the status quo and
+    the given reference plans (e.g. the build-outs)."""
+    Fs = np.array([plan_objectives(om, p)[0] for p in [np.zeros((om.n, 4))] + list(plans)])
+    worst, best = Fs.max(0), Fs.min(0)
     scale = np.maximum(worst - best, 1e-9)
     return worst + 0.1 * scale, scale * 1.1
 
 
 def run_nsga3(
-    cap: CapacityModel,
+    om: OutcomeModel,
     pop_size: int = 120,
     generations: int = 100,
-    n_partitions: int = 7,
+    n_partitions: int = 2,
     seed: int = 0,
     seed_plans: Optional[List[np.ndarray]] = None,
+    reference_plans: Optional[List[np.ndarray]] = None,
     seed_noise: float = 0.05,
 ) -> Dict:
     if not PYMOO:
         raise ImportError("pip install pymoo")
-    prob = FARProblem(cap)
+    prob = PlanProblem(om)
     rng = np.random.default_rng(seed)
-    X0 = rng.random((pop_size, cap.n))
+    X0 = rng.random((pop_size, prob.n_var))
     if seed_plans:
-        head = np.maximum(prob.head, 1e-12)
-        seeds = [np.where(prob.head > 0, (p - cap.far0) / head, 0.0) for p in seed_plans]
+        seeds = [prob.to_x(p) for p in seed_plans]
         m = len(seeds)
         for k in range(pop_size // 2):
             xb = seeds[k % m]
-            X0[k] = xb if k < m else np.clip(xb + rng.normal(0, seed_noise, cap.n), 0, 1)
-    ref_dirs = get_reference_directions("das-dennis", 4, n_partitions=n_partitions)
+            X0[k] = xb if k < m else np.clip(xb + rng.normal(0, seed_noise, prob.n_var), 0, 1)
+    ref_dirs = get_reference_directions("das-dennis", len(KEYS), n_partitions=n_partitions)
     algo = NSGA3(ref_dirs=ref_dirs, pop_size=pop_size, sampling=X0, eliminate_duplicates=True)
-    ref, scale = normalisation(cap)
+    ref, scale = normalisation(om, reference_plans or [])
     cb = _HVRecorder(ref, scale)
     res = minimize(prob, algo, ("n_gen", generations), seed=seed, callback=cb, verbose=False)
-    F = np.atleast_2d(res.F)
-    X = np.atleast_2d(res.X)
-    fars = np.array([prob.to_far(x) for x in X])
+    feasible = res.X is not None
+    if feasible:
+        F, X = np.atleast_2d(res.F), np.atleast_2d(res.X)
+    else:  # no feasible plan found: report the least-violating population members
+        cv = res.pop.get("CV").ravel()
+        keep = cv <= cv.min() + 1e-9
+        F, X = res.pop.get("F")[keep], res.pop.get("X")[keep]
+    plans = [prob.to_plan(x) for x in X]
     Fn = (F - F.min(0)) / np.maximum(F.max(0) - F.min(0), 1e-12)
     knee = int(np.argmin(np.linalg.norm(Fn, axis=1)))
-    return {"F": F, "far": fars, "knee": knee, "hv_history": cb.values,
-            "objectives": OBJECTIVES, "n_ref_dirs": int(len(ref_dirs))}
+    return {"F": F, "plans": plans, "knee": knee, "hv_history": cb.values, "objectives": OBJECTIVES,
+            "n_ref_dirs": int(len(ref_dirs)), "feasible": feasible}

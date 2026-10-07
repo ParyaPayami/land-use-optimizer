@@ -66,3 +66,7 @@ column_mapping:
   FactryArea: factory_area
   PFIRM15_FL: flood_2015
   FIRM07_FLA: flood_2007
+  OtherArea: other_area
+  BCTCB2020: bctcb2020
+  MIHOption1: mih_option
+  TrnstZone: transit_zone

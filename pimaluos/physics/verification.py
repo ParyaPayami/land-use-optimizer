@@ -15,11 +15,14 @@ added floor area and terminates.
 
 from __future__ import annotations
 
-from typing import Dict, List, Tuple
+from typing import TYPE_CHECKING, Dict, List, Tuple
 
 import numpy as np
 
 from pimaluos.physics.capacity import CapacityModel
+
+if TYPE_CHECKING:  # pragma: no cover
+    from pimaluos.outcomes import OutcomeModel
 
 
 def violation_counts(result: Dict) -> Dict[str, int]:
@@ -61,3 +64,28 @@ def verify_and_repair(
         far = np.where(bad, model.far0 + (far - model.far0) * factor, far)
         it += 1
     return far, history
+
+
+def repair_plan(om: "OutcomeModel", plan: np.ndarray, max_iter: int = 30,
+                shrink: float = 0.5) -> Tuple[np.ndarray, List[Dict]]:
+    """Repair a multi-use plan: every lot whose added floor area contributes to a
+    traffic, sewer or new-shade violation has all its additions multiplied by
+    ``shrink``; after ``max_iter`` rounds offending lots return to existing
+    conditions. Terminates because additions only shrink and the existing city
+    has no violations."""
+    plan = om.env.clip(np.asarray(plan, float))
+    history = []
+    it = 0
+    while True:
+        res = om.evaluate(plan)
+        counts = violation_counts(res["capacity"])
+        history.append({"iteration": it, **counts, "added_floor_area_sqft": res["summary"]["added_floor_area_sqft"]})
+        if sum(counts.values()) == 0:
+            break
+        bad = contributing_lots(om.cap, res["capacity"])
+        if not bad.any():
+            break
+        factor = shrink if it < max_iter else 0.0
+        plan = np.where(bad[:, None], plan * factor, plan)
+        it += 1
+    return plan, history

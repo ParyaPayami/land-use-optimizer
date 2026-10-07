@@ -8,4 +8,5 @@ edge_ablation: {enabled: true, seeds: [0], epochs: 10}
 marl: {iterations: 4, horizon: 4, delta_far: 0.5}
 nash: {enabled: true, n_lots: 15}
 voting_sensitivity: {enabled: true, developer_weights: [0.1, 0.3]}
-pareto: {enabled: true, seeds: [0], pop_size: 20, generations: 5, n_partitions: 3}
+pareto: {enabled: true, seeds: [0], pop_size: 40, generations: 5, n_partitions: 2}
+uncertainty: {enabled: true, n_draws: 10}

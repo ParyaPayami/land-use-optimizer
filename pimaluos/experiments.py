@@ -11,11 +11,12 @@ Outputs (``<out>/``):
 ``gnn.json``             per-seed pre-training curves (train/validation)
 ``edge_ablation.json``   per-seed validation loss for each edge configuration
 ``marl.json``            per-seed, per-variant training histories
-``metrics.csv``          long table: seed, method, verified, metric, value
+``metrics.csv``          long table: seed, method, verified, metric, value (all outcomes)
 ``nash.json``            per-seed voting-game analysis
 ``voting_sensitivity.json``  post-hoc aggregation with varied voting weights
 ``pareto.json``          NSGA-III cold vs seeded: fronts, knees, hypervolume curves
-``plans/*.npz``          FAR vectors for every plan (for maps)
+``uncertainty.json``     Monte Carlo re-evaluation of the first seed's repaired plans
+``plans/*.npz``          added floor area by use for every plan (for maps)
 """
 
 from __future__ import annotations
@@ -35,14 +36,17 @@ import yaml
 
 import pimaluos
 from pimaluos import baselines as B
+from pimaluos.context.build import build_context, load_context, save_context
 from pimaluos.core.data_loader import SyntheticCityLoader, get_data_loader
 from pimaluos.core.graph_builder import ALL_EDGE_TYPES, RELATION_NAMES
 from pimaluos.models.agents import AGENT_TYPES, MARLTrainer, PPOConfig
 from pimaluos.models.gnn import ParcelGNN
 from pimaluos.models.nash import analyse_consensus
 from pimaluos.models.pareto import normalisation, plan_objectives, run_nsga3
+from pimaluos.outcomes import USES, OutcomeParams
 from pimaluos.physics.capacity import CapacityParams
 from pimaluos.pipeline import UrbanOptSystem
+from pimaluos.uncertainty import monte_carlo
 
 logger = logging.getLogger("pimaluos.experiments")
 
@@ -54,13 +58,17 @@ DEFAULT_CONFIG = {
     "gnn": {"epochs": 300, "lr": 1e-3, "patience": 50, "hidden_channels": 256, "embed_dim": 128, "heads": 4},
     "edge_ablation": {"enabled": True, "seeds": [0, 1, 2], "epochs": 150},
     "marl": {"iterations": 100, "horizon": 10, "delta_far": 0.5, "ppo": {}},
-    "variants": ["pimaluos", "no_gnn", "no_capacity_feedback", "single_agent_planner", "no_equity_agent"],
+    "variants": ["pimaluos", "no_gnn", "no_capacity_feedback", "single_agent_planner", "no_equity_agent",
+                 "self_aware"],
+    "awareness": 0.5,
     "baseline_horizon": 10,
     "nash": {"enabled": True, "n_lots": 200},
     "voting_sensitivity": {"enabled": True, "developer_weights": [0.1, 0.2, 0.3, 0.4, 0.5]},
-    "pareto": {"enabled": True, "seeds": [0, 1, 2], "pop_size": 120, "generations": 100, "n_partitions": 7},
+    "pareto": {"enabled": True, "seeds": [0, 1, 2], "pop_size": 120, "generations": 100, "n_partitions": 2},
+    "uncertainty": {"enabled": True, "n_draws": 200},
     "capacity": {},
-    "data": {"include_affordable_far": False},
+    "outcomes": {},
+    "context": {"raw_dir": "data/raw/context", "cache_dir": "data/processed/context_{city}"},
 }
 
 
@@ -137,16 +145,27 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
 
     # ------------------------------------------------------------ data + graph
     t0 = time.time()
+    ctx = None
     if config["city"] == "synthetic":
         ds = SyntheticCityLoader(**config.get("synthetic", {})).load()
     else:
-        ds = get_data_loader(config["city"], pluto_path,
-                             include_affordable_far=config.get("data", {}).get("include_affordable_far", False)).load()
+        ds = get_data_loader(config["city"], pluto_path).load()
+        cc = config["context"]
+        cache = Path(cc["cache_dir"].format(city=config["city"]))
+        if (cache / "meta.json").exists():
+            ctx = load_context(cache)
+            if len(ctx.node_of_lot) != len(ds.gdf):
+                ctx = None
+        if ctx is None:
+            ctx = build_context(ds.gdf, cc["raw_dir"])
+            save_context(ctx, cache)
     timings["data_s"] = time.time() - t0
     gnn_cfg = dict(config["gnn"])
     gnn_kwargs = {k: gnn_cfg.pop(k) for k in ["hidden_channels", "embed_dim", "heads"] if k in gnn_cfg}
-    sysm = UrbanOptSystem(ds, CapacityParams(**config.get("capacity", {})),
+    sysm = UrbanOptSystem(ds, ctx, CapacityParams(**config.get("capacity", {})),
+                          OutcomeParams(**config.get("outcomes", {})),
                           graph_kwargs=config.get("graph", {}), gnn_kwargs=gnn_kwargs)
+    om = sysm.outcomes
     t0 = time.time()
     sysm.build_graph()
     timings["graph_s"] = time.time() - t0
@@ -155,11 +174,17 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
     np.savez_compressed(out_dir / "plans" / "lots.npz", x=cap.x, y=cap.y, far0=cap.far0, ub=cap.ub)
     ds.gdf[["geometry"]].to_parquet(out_dir / "plans" / "lots_geometry.parquet")
     rec = _Recorder()
-    baseline_summary = cap.baseline["summary"]
+    baseline_summary = {**cap.baseline["summary"], **om.base["summary"]}
+    env_ = om.env
     data_stats = {
         "existing_floor_area_sqft": float((cap.far0 * cap.A).sum()),
-        "zoning_capacity_floor_area_sqft": float((cap.ub * cap.A).sum()),
-        "lots_with_headroom": int((cap.ub > cap.far0 + 1e-9).sum()),
+        "zoning_capacity_floor_area_sqft": float(((cap.far0 * cap.A) + env_.total).sum()),
+        "capacity_res_market_sqft": float(env_.res_market.sum()),
+        "capacity_res_uap_sqft": float((env_.res_total - env_.res_market).sum()),
+        "capacity_commercial_sqft": float(env_.com.sum()), "capacity_facility_sqft": float(env_.facility.sum()),
+        "capacity_total_sqft": float(env_.total.sum()), "n_mih_lots": int(env_.mih.sum()),
+        "lots_with_headroom": int((env_.total > 1.0).sum()),
+        "context": sysm.ctx.meta, "context_params": sysm.ctx.params,
         "n_taz": int(cap.n_taz), "n_catchments": int(cap.n_catch),
         "n_vulnerable_lots": int(cap.vulnerable.sum()), "n_flood_lots": int(cap.flood.sum()),
         "existing_taz_over_capacity": int(baseline_summary["taz_over_capacity"]),
@@ -172,13 +197,15 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
     gnn_out, marl_out, nash_out, vote_out = {}, {}, {}, {}
     mcfg = config["marl"]
     ppo = PPOConfig(**mcfg.get("ppo", {}))
+    aw = config.get("awareness", 0.5)
     variant_specs = {
-        "pimaluos": dict(use_gnn=True, physics_weight=1.0, agent_types=AGENT_TYPES),
-        "no_gnn": dict(use_gnn=False, physics_weight=1.0, agent_types=AGENT_TYPES),
-        "no_capacity_feedback": dict(use_gnn=True, physics_weight=0.0, agent_types=AGENT_TYPES),
-        "single_agent_planner": dict(use_gnn=True, physics_weight=1.0, agent_types=["planner"]),
+        "pimaluos": dict(use_gnn=True, physics_weight=1.0, agent_types=AGENT_TYPES, awareness=aw),
+        "no_gnn": dict(use_gnn=False, physics_weight=1.0, agent_types=AGENT_TYPES, awareness=aw),
+        "no_capacity_feedback": dict(use_gnn=True, physics_weight=0.0, agent_types=AGENT_TYPES, awareness=aw),
+        "single_agent_planner": dict(use_gnn=True, physics_weight=1.0, agent_types=["planner"], awareness=aw),
         "no_equity_agent": dict(use_gnn=True, physics_weight=1.0,
-                                agent_types=[a for a in AGENT_TYPES if a != "equity_advocate"]),
+                                agent_types=[a for a in AGENT_TYPES if a != "equity_advocate"], awareness=aw),
+        "self_aware": dict(use_gnn=True, physics_weight=1.0, agent_types=AGENT_TYPES, awareness=0.0),
     }
     timings.update(gnn_s=0.0, marl_s=0.0, gnn_epochs=0, marl_iters=0)
     ckpt_dir = out_dir / "checkpoints"
@@ -230,10 +257,11 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
 
         # Baselines (deterministic except random).
         plans = {
-            "status_quo": B.status_quo(cap),
-            "random": B.random_plan(cap, config["baseline_horizon"], mcfg["delta_far"], seed),
-            "rule_based": B.rule_based_plan(cap, config["baseline_horizon"], mcfg["delta_far"]),
-            "zoning_buildout": B.zoning_buildout(cap),
+            "status_quo": B.status_quo(om),
+            "random": B.random_plan(om, config["baseline_horizon"], mcfg["delta_far"], seed),
+            "rule_based": B.rule_based_plan(om, config["baseline_horizon"], mcfg["delta_far"]),
+            "buildout_market": B.buildout_market(om),
+            "buildout_uap": B.buildout_uap(om),
         }
         marl_out[seed] = {}
         trainers = {}
@@ -241,7 +269,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             spec = variant_specs[v]
             env = sysm.make_env(use_gnn=spec["use_gnn"], physics_weight=spec["physics_weight"],
                                 agent_types=spec["agent_types"], horizon=mcfg["horizon"],
-                                delta_far=mcfg["delta_far"])
+                                delta_far=mcfg["delta_far"], awareness=spec["awareness"])
             v_ck = ckpt_dir / f"seed_{seed}_{v}.pt"
             if v_ck.exists():
                 st = torch.load(v_ck, weights_only=False)
@@ -274,17 +302,18 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             trainers[v] = tr
             plans[v] = tr.final_plan()[0]
 
-        for name, far in plans.items():
-            rec.add(seed, name, False, cap.evaluate(far)["summary"])
-            vfar, hist = sysm.verify(far)
-            s = cap.evaluate(vfar)["summary"]
+        verified = {}
+        for name, plan in plans.items():
+            rec.add(seed, name, False, om.evaluate(plan)["summary"])
+            vplan, hist = sysm.verify(plan)
+            verified[name] = vplan
+            s = om.evaluate(vplan)["summary"]
             s["repair_iterations"] = len(hist) - 1
-            left = s["traffic_violations"] + s["catchments_over_capacity"] + s["lots_newly_shaded"]
-            if left:
-                logger.warning("seed %d %s: %d violations remain after repair", seed, name, left)
+            if s["capacity_violations"]:
+                logger.warning("seed %d %s: %d violations remain after repair", seed, name, s["capacity_violations"])
             rec.add(seed, name, True, s)
             if seed == seeds[0]:
-                np.savez_compressed(out_dir / "plans" / f"{name}.npz", far=far, far_verified=vfar)
+                np.savez_compressed(out_dir / "plans" / f"{name}.npz", plan=plan, plan_verified=vplan)
 
         if config["nash"]["enabled"] and "pimaluos" in trainers:
             nash_out[seed] = analyse_consensus(trainers["pimaluos"].env, plans["pimaluos"],
@@ -297,8 +326,8 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 rest = (1.0 - wd) / (len(AGENT_TYPES) - 1)
                 w = {a: (wd if a == "developer" else rest) for a in AGENT_TYPES}
                 tr.env.voting.weights = w
-                far, _ = tr.final_plan()
-                vote_out[seed].append({"developer_weight": wd, **cap.evaluate(far)["summary"]})
+                vp, _ = tr.final_plan()
+                vote_out[seed].append({"developer_weight": wd, **om.evaluate(vp)["summary"]})
             tr.env.voting.weights = {a: 0.2 for a in AGENT_TYPES}
 
         if seed == seeds[0] and "pimaluos" in trainers:
@@ -344,15 +373,15 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         timings["edge_ablation_s"] = float(sum(sum(v.get("seconds", {}).values()) for v in abl.values()))
 
     # ------------------------------------------------------------ Pareto
+    seed0 = {k: np.load(out_dir / "plans" / f"{k}.npz") for k in ["pimaluos", "buildout_market", "buildout_uap"]
+             if (out_dir / "plans" / f"{k}.npz").exists()}
     if config["pareto"]["enabled"]:
         pc = config["pareto"]
-        seed0_plans = {k: np.load(out_dir / "plans" / f"{k}.npz") for k in ["pimaluos", "zoning_buildout"]
-                       if (out_dir / "plans" / f"{k}.npz").exists()}
-        seeds_for_init = [cap.far0]
-        if "pimaluos" in seed0_plans:
-            seeds_for_init += [seed0_plans["pimaluos"]["far"], seed0_plans["pimaluos"]["far_verified"]]
-        if "zoning_buildout" in seed0_plans:
-            seeds_for_init += [seed0_plans["zoning_buildout"]["far_verified"]]
+        seeds_for_init = [np.zeros((om.n, 4))]
+        if "pimaluos" in seed0:
+            seeds_for_init += [seed0["pimaluos"]["plan"], seed0["pimaluos"]["plan_verified"]]
+        seeds_for_init += [seed0[k]["plan_verified"] for k in ("buildout_market", "buildout_uap") if k in seed0]
+        refs = [B.buildout_market(om), B.buildout_uap(om)]
         par_ck = ckpt_dir / "pareto.json"
         par = json.loads(par_ck.read_text()) if par_ck.exists() else {}
         for seed in pc["seeds"]:
@@ -361,25 +390,24 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
                 if mode in par[str(seed)]:
                     continue
                 tp = time.time()
-                r = run_nsga3(cap, pc["pop_size"], pc["generations"], pc["n_partitions"], seed, sp)
-                knee_far = r["far"][r["knee"]]
+                r = run_nsga3(om, pc["pop_size"], pc["generations"], pc["n_partitions"], seed, sp, refs)
+                knee = r["plans"][r["knee"]]
                 par[str(seed)][mode] = {"F": r["F"].tolist(), "knee": r["knee"], "hv": r["hv_history"],
-                                   "knee_summary": cap.evaluate(knee_far)["summary"],
+                                        "knee_summary": om.evaluate(knee)["summary"], "feasible": r["feasible"],
                                         "n_solutions": int(len(r["F"])), "n_ref_dirs": r["n_ref_dirs"],
                                         "seconds": time.time() - tp}
                 _atomic_write_text(par_ck, json.dumps(par, default=_json_default))
                 if seed == pc["seeds"][0]:
-                    np.savez_compressed(out_dir / "plans" / f"pareto_knee_{mode}.npz", far=knee_far)
+                    np.savez_compressed(out_dir / "plans" / f"pareto_knee_{mode}.npz", plan=knee)
         # Is each first-seed plan dominated by a front, and how many front plans lie inside the
         # hypervolume reference box (hypervolume is zero when none do)?
-        ref, _ = normalisation(cap)
+        ref, _ = normalisation(om, refs)
         compare = {}
-        if "pimaluos" in seed0_plans:
-            compare.update(pimaluos=seed0_plans["pimaluos"]["far"],
-                           pimaluos_verified=seed0_plans["pimaluos"]["far_verified"])
-        if "zoning_buildout" in seed0_plans:
-            compare["zoning_buildout_verified"] = seed0_plans["zoning_buildout"]["far_verified"]
-        f_plans = {k: plan_objectives(cap, f) for k, f in compare.items()}
+        if "pimaluos" in seed0:
+            compare.update(pimaluos=seed0["pimaluos"]["plan"], pimaluos_verified=seed0["pimaluos"]["plan_verified"])
+        compare.update({f"{k}_verified": seed0[k]["plan_verified"] for k in ("buildout_market", "buildout_uap")
+                        if k in seed0})
+        f_plans = {k: plan_objectives(om, f)[0] for k, f in compare.items()}
         for runs in par.values():
             for e in runs.values():
                 F = np.asarray(e["F"])
@@ -389,6 +417,18 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         (out_dir / "pareto.json").write_text(json.dumps(par, default=_json_default))
         timings["pareto_s"] = float(sum(e.get("seconds", 0.0) for v in par.values() for e in v.values()))
 
+    # ------------------------------------------------------------ uncertainty
+    if config.get("uncertainty", {}).get("enabled") and seed0:
+        tu = time.time()
+        names = [n for n in ["pimaluos", "buildout_market", "buildout_uap"] if n in seed0]
+        others = ["rule_based", "no_capacity_feedback", "single_agent_planner"]
+        mc_plans = {f"{n}_verified": seed0[n]["plan_verified"] for n in names}
+        mc_plans.update({f"{n}_verified": np.load(out_dir / "plans" / f"{n}.npz")["plan_verified"] for n in others
+                         if (out_dir / "plans" / f"{n}.npz").exists()})
+        unc = monte_carlo(om, mc_plans, n_draws=config["uncertainty"]["n_draws"], seed=0)
+        (out_dir / "uncertainty.json").write_text(json.dumps(unc, default=_json_default))
+        timings["uncertainty_s"] = time.time() - tu
+
     timings["total_s"] = time.time() - t_start
     manifest = {
         "pimaluos_version": pimaluos.__version__,
@@ -397,6 +437,8 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         "data_stats": data_stats,
         "baseline_summary": baseline_summary,
         "capacity_params": cap.params_dict(),
+        "outcome_params": om.params_dict(),
+        "uses": list(USES),
         "timings": timings,
         "environment": {"python": platform.python_version(), "torch": torch.__version__,
                         "platform": platform.platform(), "processor": platform.processor(),

@@ -1,12 +1,12 @@
 """
 Game-theoretic analysis of the consensus vote.
 
-For a sample of lots, each lot defines a 5-player voting game around the final
-consensus plan: every stakeholder casts one of {decrease, maintain, increase}
-for that lot, the weighted-plurality rule picks the outcome, and agent a's
-payoff for outcome o is its utility for that lot when the lot's FAR is moved by
-o (all other lots fixed at the plan), evaluated exactly with the capacity
-screens. Utilities are measured relative to the "maintain" outcome.
+For a sample of lots, each lot defines a voting game around the final
+consensus plan: every stakeholder casts one of the actions {keep, residential,
+office, retail, facility} for that lot, the weighted-plurality rule picks the
+outcome, and agent a's payoff for outcome o is its utility for that lot when
+action o is applied to that lot (all other lots fixed at the plan), evaluated
+exactly with the outcome model. Utilities are relative to "keep".
 
 Reported per lot:
 
@@ -35,32 +35,36 @@ import numpy as np
 from pimaluos.models.agents import ConsensusVotingMechanism, MultiAgentEnvironment
 
 
-def outcome_payoffs(env: MultiAgentEnvironment, far_plan: np.ndarray, lots: np.ndarray) -> np.ndarray:
-    """Return payoffs[lot, outcome, agent] (relative to 'maintain')."""
+def outcome_payoffs(env: MultiAgentEnvironment, plan: np.ndarray, lots: np.ndarray) -> np.ndarray:
+    """Return payoffs[lot, outcome, agent] (relative to 'keep')."""
     agents = env.agent_types
-    pay = np.zeros((len(lots), 3, len(agents)))
-    cap = env.cap
-    base_u = env._utilities(cap.evaluate(far_plan))
+    n_out = env.voting.n_actions
+    pay = np.zeros((len(lots), n_out, len(agents)))
+    env.plan = plan.copy()
+    base_u = env._utilities(env.om.evaluate(plan))
     for li, i in enumerate(lots):
-        for o in (0, 2):
-            far = far_plan.copy()
-            far[i] = np.clip(far[i] + (o - 1) * env.delta, cap.far0[i], cap.ub[i])
-            u = env._utilities(cap.evaluate(far))
+        for o in range(1, n_out):
+            actions = np.zeros(env.n, dtype=int)
+            actions[i] = o
+            env.plan = plan.copy()
+            u = env._utilities(env.om.evaluate(env.apply(actions)))
             for ai, a in enumerate(agents):
                 pay[li, o, ai] = u[a][i] - base_u[a][i]
+    env.plan = plan.copy()
     return pay
 
 
 def analyse_lot(pay: np.ndarray, agents: List[str], voting: ConsensusVotingMechanism) -> Dict:
-    """pay: [3 outcomes, n_agents]."""
+    """pay: [n_outcomes, n_agents]."""
     n_a = len(agents)
+    n_out = pay.shape[0]
     welfare = pay.sum(1)
     opt = int(np.argmax(welfare))
     sincere_votes = pay.argmax(0)
     def undominated(a):
         col = pay[:, a]
         strictly_worst = (col <= col.min() + 1e-12) & (col < col.max() - 1e-12)
-        return [o for o in range(3) if not strictly_worst[o]]
+        return [o for o in range(n_out) if not strictly_worst[o]]
 
     allowed = [undominated(a) for a in range(n_a)]
 
@@ -100,14 +104,14 @@ def analyse_lot(pay: np.ndarray, agents: List[str], voting: ConsensusVotingMecha
     }
 
 
-def analyse_consensus(env: MultiAgentEnvironment, far_plan: np.ndarray, n_lots: int = 200,
+def analyse_consensus(env: MultiAgentEnvironment, plan: np.ndarray, n_lots: int = 200,
                       seed: int = 0, lots: Optional[np.ndarray] = None) -> Dict:
     rng = np.random.default_rng(seed)
-    cap = env.cap
-    eligible = np.where(cap.ub > cap.far0 + 1e-9)[0]
+    room = env.om.env.total - plan.sum(1)
+    eligible = np.where(room > 1.0)[0]
     if lots is None:
         lots = rng.choice(eligible, size=min(n_lots, len(eligible)), replace=False)
-    pay = outcome_payoffs(env, far_plan, lots)
+    pay = outcome_payoffs(env, plan, lots)
     rows = [analyse_lot(pay[k], env.agent_types, env.voting) for k in range(len(lots))]
     nontriv = [r for r in rows if not r["trivial"]]
     poas = np.array([r["poa"] for r in nontriv if np.isfinite(r["poa"])])

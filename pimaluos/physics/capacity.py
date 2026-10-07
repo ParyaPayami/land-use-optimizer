@@ -273,14 +273,22 @@ class CapacityModel:
         return shaded, cast
 
     # ------------------------------------------------------------------ evaluate
-    def evaluate(self, far: np.ndarray) -> Dict:
-        """Evaluate a FAR plan; returns per-lot arrays and scalar summaries."""
+    def evaluate(self, far: np.ndarray, added_trips: Optional[np.ndarray] = None) -> Dict:
+        """Evaluate a FAR plan; returns per-lot arrays and scalar summaries.
+
+        ``added_trips`` (peak-hour vehicle trips per lot from added floor area,
+        by use) replaces the land-use-class trip rate for the added floor area
+        when the plan specifies uses.
+        """
         p = self.p
         far = np.asarray(far, dtype=float)
         cov, floors, height = self.envelope(far)
         dfa = (far - self.far0) * self.A
 
-        demand = self._demand(far)
+        if added_trips is None:
+            demand = self._demand(far)
+        else:
+            demand = self._demand(self.far0) + np.bincount(self.taz, weights=added_trips, minlength=self.n_taz)
         vc = demand / self.cap_taz
         tti = 1 + p.bpr_alpha * vc ** p.bpr_beta
 

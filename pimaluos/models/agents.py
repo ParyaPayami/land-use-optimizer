@@ -1,54 +1,45 @@
 """
-Stakeholder agents, consensus voting and the multi-agent FAR environment.
+Stakeholder agents, consensus voting and the multi-agent planning environment.
 
 Decision
-    Each lot's FAR is adjusted by one of three actions, {-delta, 0, +delta}
-    (delta = 0.5 by default), starting from the existing built FAR. FAR is
-    bounded below by the existing FAR (plans add floor area; "decrease"
-    retracts an earlier increase, it never demolishes existing floor area) and
-    above by ``ub = max(zoning max FAR, existing FAR)``, so zoning compliance
-    holds by construction (a hard constraint, not a learned behaviour).
+    At every step each lot receives one of five actions: keep, or add
+    ``delta`` FAR (x lot area) of residential, office, retail or community-
+    facility floor area. Additions are projected into the zoning envelope
+    (:class:`~pimaluos.outcomes.ZoningEnvelope`): per-use caps from MapPLUTO,
+    residential floor area above ResidFAR only as income-restricted floor area
+    (City of Yes Universal Affordability Preference), and a total cap. Existing
+    floor area is never removed.
 
 Agents
-    Five stakeholder types (resident, developer, planner, environmentalist,
-    equity advocate). Each type has one policy shared over all lots
-    (parameter sharing). Each agent proposes an action for every lot; the
+    Five stakeholder types, each with one policy shared over all lots
+    (parameter sharing). Every agent proposes an action for every lot; the
     proposals are aggregated by :class:`ConsensusVotingMechanism`.
 
 State (per lot)
-    GNN embedding (or standardised raw features in the No-GNN ablation)
-    concatenated with five dynamic signals: current FAR / ub, cell V/C,
-    catchment sewer utilisation, number of lots newly shaded by this lot, and
-    the cumulative FAR change.
+    GNN embedding (or standardised raw features in the No-GNN ablation) and
+    ``N_DYNAMIC`` dynamic signals: used share of the lot's total, residential,
+    commercial and facility capacity; cell V/C; catchment sewer utilisation;
+    lots newly shaded by this lot; per-capita access, jobs-housing balance and
+    land-use mix in the lot's 15-minute walkshed; transit within 15 minutes;
+    flood zone; displacement vulnerability; Mandatory Inclusionary Housing area.
 
-Rewards (per lot, per agent): Eqs. (2)-(6) of the manuscript, with these
-MapPLUTO-derived proxies (no census data are joined):
+Utilities (per lot; rewards are per-step increments). All floor-area terms are
+in FAR units (sq ft / lot area); money and carbon are scaled by borough medians
+per sq ft so that one FAR of typical floor area is about one unit:
 
-    resident   = w1 * HousingSupply - w2 * Congestion + w3 * GreenAccess
-    developer  = FAR / ub - gamma * Violations
-    planner    = w1 * TaxRevenue + w2 * InfraEfficiency - w3 * PublicCost
-    environment= -Impervious + SolarAccess - FloodExposure
-    equity     = -DisplacementRisk - GreenGini
+    resident    = a1 log(access) + a2 mix - pw (a3 congestion + a4 newly_shaded)
+    developer   = market value - pw * violations
+    planner     = tax + jobs + homes + jobs-housing balance - pw * sewer overload
+    environment = - life-cycle carbon + transit-oriented floor area - flood-zone
+                  floor area - pw * shade imposed on other lots
+    equity      = affordable homes - floor area on vulnerable lots
+                  + log(access) where vulnerable residents live
 
-    HousingSupply    added residential floor area / lot area (FAR units)
-    Congestion       max(0, V/C - threshold) of the lot's traffic cell
-    GreenAccess      open space per resident in the 3x3 cell neighbourhood,
-                     divided by its city-wide existing median
-    Violations       1 if the lot contributes to any capacity violation
-    TaxRevenue       added floor area x assessed value per building sq ft,
-                     scaled by the city-wide median value per lot sq ft
-    InfraEfficiency  1 - Congestion
-    PublicCost       max(0, sewer utilisation - 1) of the lot's catchment
-    Impervious       change in footprint coverage
-    SolarAccess      - (lots newly shaded by this lot)
-    FloodExposure    added FAR on lots in the 2007/2015 FEMA flood zones
-    DisplacementRisk added FAR on vulnerable residential lots (bottom quartile
-                     of assessed value per unit)
-    GreenGini        city-wide Gini of green space per resident (shared)
-
-    ``physics_weight`` scales every capacity-derived term (Congestion,
-    Violations, PublicCost, SolarAccess); setting it to 0 gives the
-    "no capacity feedback" ablation.
+``awareness`` (beta) mixes each lot's own utility with the borough mean:
+u = (1 - beta) u_lot + beta mean(u), from self-interested (0) to fully
+city-aware (1) agents, following the awareness levels of Qian et al. (2023).
+``physics_weight`` scales every capacity-derived term; 0 gives the
+"no capacity feedback" ablation.
 """
 
 from __future__ import annotations
@@ -62,57 +53,54 @@ import torch
 import torch.nn as nn
 from torch.distributions import Categorical
 
-from pimaluos.physics.capacity import CapacityModel
+from pimaluos.outcomes import FACILITY, OFFICE, RES, RETAIL, OutcomeModel
 from pimaluos.physics.verification import contributing_lots
 
 AGENT_TYPES = ["resident", "developer", "planner", "environmentalist", "equity_advocate"]
-ACTION_DECREASE, ACTION_MAINTAIN, ACTION_INCREASE = 0, 1, 2
-N_DYNAMIC = 5
+ACTIONS = ["keep", "residential", "office", "retail", "facility"]
+ACTION_KEEP = 0
+ACTION_USE = {1: RES, 2: OFFICE, 3: RETAIL, 4: FACILITY}
+N_ACTIONS = len(ACTIONS)
+N_DYNAMIC = 14
 
-DEFAULT_VOTING_WEIGHTS = {
-    "resident": 0.20, "developer": 0.20, "planner": 0.20,
-    "environmentalist": 0.20, "equity_advocate": 0.20,
-}
+DEFAULT_VOTING_WEIGHTS = {a: 0.20 for a in AGENT_TYPES}
 
 
 @dataclass
 class UtilityWeights:
-    resident: Tuple[float, float, float] = (1.0, 1.0, 0.5)   # housing, congestion, green
+    resident: Tuple[float, float, float, float] = (5.0, 1.0, 1.0, 0.5)  # access, mix, congestion, shaded
     developer_gamma: float = 1.0
-    planner: Tuple[float, float, float] = (1.0, 0.5, 1.0)    # tax, efficiency, public cost
-    environment: Tuple[float, float, float] = (1.0, 0.2, 1.0)  # impervious, solar, flood
-    equity: Tuple[float, float] = (1.0, 1.0)                  # displacement, gini
+    planner: Tuple[float, float, float, float, float] = (1.0, 0.5, 0.5, 1.0, 1.0)  # tax, jobs, homes, jh, sewer
+    environment: Tuple[float, float, float, float] = (1.0, 0.5, 1.0, 0.2)  # carbon, transit, flood, shade
+    equity: Tuple[float, float, float] = (2.0, 1.0, 5.0)  # affordable, vulnerable, access
 
 
 class ConsensusVotingMechanism:
-    """Weighted plurality vote per lot; ties resolve to the status quo (maintain)."""
+    """Weighted plurality vote per lot; ties resolve to the status quo (keep)."""
 
-    def __init__(self, weights: Optional[Dict[str, float]] = None):
+    def __init__(self, weights: Optional[Dict[str, float]] = None, n_actions: int = N_ACTIONS):
         self.weights = dict(weights or DEFAULT_VOTING_WEIGHTS)
+        self.n_actions = n_actions
 
     def aggregate(self, proposals: Dict[str, np.ndarray]) -> np.ndarray:
         agents = list(proposals)
         n = len(proposals[agents[0]])
-        score = np.zeros((n, 3))
+        score = np.zeros((n, self.n_actions))
         for a in agents:
             score[np.arange(n), np.asarray(proposals[a])] += self.weights.get(a, 0.0)
         best = score.max(1, keepdims=True)
         winners = np.isclose(score, best)
         out = np.argmax(score, axis=1)
-        tie = winners.sum(1) > 1
-        out[tie & winners[:, ACTION_MAINTAIN]] = ACTION_MAINTAIN
-        # Ties not involving "maintain" (increase vs decrease) also resolve to maintain.
-        out[tie & ~winners[:, ACTION_MAINTAIN]] = ACTION_MAINTAIN
+        out[winners.sum(1) > 1] = ACTION_KEEP  # any tie keeps the status quo
         return out
 
-    # Backwards-compatible name.
     aggregate_votes = aggregate
 
 
 class StakeholderAgent(nn.Module):
     """Actor-critic with 2 x 64 tanh MLPs (shared across lots)."""
 
-    def __init__(self, state_dim: int, agent_type: str, hidden: int = 64, action_dim: int = 3):
+    def __init__(self, state_dim: int, agent_type: str, hidden: int = 64, action_dim: int = N_ACTIONS):
         super().__init__()
         self.agent_type = agent_type
         self.state_dim = state_dim
@@ -132,93 +120,119 @@ class StakeholderAgent(nn.Module):
 
 
 class MultiAgentEnvironment:
-    """Vectorised multi-lot FAR environment over the capacity screens."""
+    """Vectorised multi-lot, multi-use planning environment over the outcome model."""
 
     def __init__(
         self,
-        capacity: CapacityModel,
+        outcomes: OutcomeModel,
         static_state: np.ndarray,
         agent_types: Optional[List[str]] = None,
         delta_far: float = 0.5,
         horizon: int = 10,
         physics_weight: float = 1.0,
+        awareness: float = 0.5,
         voting_weights: Optional[Dict[str, float]] = None,
         utility_weights: Optional[UtilityWeights] = None,
     ):
-        self.cap = capacity
+        self.om = outcomes
+        self.cap = outcomes.cap
         self.static = np.asarray(static_state, dtype=np.float32)
-        self.n = capacity.n
+        self.n = outcomes.n
         self.agent_types = list(agent_types or AGENT_TYPES)
         self.delta = delta_far
         self.horizon = horizon
         self.physics_weight = physics_weight
+        self.awareness = awareness
         self.voting = ConsensusVotingMechanism(voting_weights)
         self.w = utility_weights or UtilityWeights()
         self.state_dim = self.static.shape[1] + N_DYNAMIC
-        base = capacity.baseline
-        self.green_ref = float(np.median(base["green_per_capita"][capacity.is_res])) if capacity.is_res.any() else 1.0
-        self.green_ref = max(self.green_ref, 1e-6)
-        vpls = capacity.value_per_bldg_sqft
-        self.value_scale = float(np.median(vpls)) if np.isfinite(vpls).any() else 1.0
+        om, A = outcomes, outcomes.A
+        self.A = np.maximum(A, 1.0)
+        self.step_sqft = self.delta * self.A
+        caps = om.env.use_caps()
+        self.caps = np.column_stack([om.env.total, caps[:, RES], caps[:, OFFICE], caps[:, FACILITY]])
+        # Scales: one FAR of typical floor area ~ one utility unit.
+        self.value_scale = float(np.median(om.av_res)) / om.p.assessment_ratio
+        self.tax_scale = float(np.median(om.av_res)) * om.p.tax_rate_class2 / 100.0
+        self.carbon_scale = float(om.eci[RES] + om.p.lifecycle_years * om.opc[RES])
+        self.jobs_scale = float(om.jobs_per_sqft[OFFICE])
+        self.homes_scale = 1.0 / om.unit_sqft
+        lot0 = om.base["lot"]
+        self.vuln = om.cap.vulnerable.astype(float)
+        node_vuln = np.bincount(om.node, weights=self.vuln * om.ctx.pop0, minlength=om.n_nodes)
+        self.vuln_area = ((om.R @ node_vuln) > 0)[om.node].astype(float)
+        self.flags = np.column_stack([lot0["transit_ok"], om.cap.flood, om.cap.vulnerable,
+                                      om.env.mih]).astype(np.float32)
         self.reset()
 
     # ---------------------------------------------------------------- dynamics
     def reset(self) -> np.ndarray:
         self.t = 0
-        self.far = self.cap.far0.copy()
-        self.result = self.cap.baseline
+        self.plan = np.zeros((self.n, 4))
+        self.result = self.om.base
         self.utilities = self._utilities(self.result)
         return self._state()
 
+    @property
+    def far(self) -> np.ndarray:
+        return self.om.far_of(self.plan)
+
     def _state(self) -> np.ndarray:
-        r = self.result
-        ub = np.maximum(self.cap.ub, 1e-6)
+        r, c = self.result, self.result["capacity"]
+        used = np.column_stack([self.plan.sum(1), self.plan[:, RES], self.plan[:, OFFICE] + self.plan[:, RETAIL],
+                                self.plan[:, FACILITY]]) / np.maximum(self.caps, 1.0)
+        lot = r["lot"]
         dyn = np.column_stack([
-            self.far / ub,
-            r["vc_lot"],
-            r["sewer_util_lot"],
-            np.minimum(r["shadow_imposed"], 10) / 10.0,
-            (self.far - self.cap.far0) / max(self.delta * self.horizon, 1e-6),
+            np.minimum(used, 1.0),
+            c["vc_lot"], c["sewer_util_lot"], np.minimum(c["shadow_imposed"], 10) / 10.0,
+            np.log(np.maximum(lot["access"], 1e-3)), lot["jh"], lot["mix"],
+            self.flags,
         ]).astype(np.float32)
         return np.concatenate([self.static, dyn], axis=1)
 
     def apply(self, actions: np.ndarray) -> np.ndarray:
-        step = (np.asarray(actions) - 1) * self.delta
-        return np.clip(self.far + step, self.cap.far0, self.cap.ub)
+        actions = np.asarray(actions)
+        add = np.zeros_like(self.plan)
+        for a, u in ACTION_USE.items():
+            m = actions == a
+            add[m, u] = self.step_sqft[m]
+        return self.om.env.clip(self.plan + add)
 
     def _utilities(self, r: Dict) -> Dict[str, np.ndarray]:
-        c, w, pw = self.cap, self.w, self.physics_weight
-        dfar = r["far"] - c.far0
-        housing = dfar * c.res_share
-        congestion = np.maximum(0.0, r["vc_lot"] - c.p.vc_threshold) * r["taz_violation"][c.taz]
-        green = r["green_per_capita"] / self.green_ref
-        violations = contributing_lots(c, r).astype(float)
-        tax = dfar * c.A * c.value_per_bldg_sqft / (c.A * self.value_scale)
-        public_cost = np.maximum(0.0, r["sewer_util_lot"] - 1.0)
-        impervious = r["coverage"] - c.cov0
-        solar = -r["shadow_imposed"]
-        flood = np.maximum(dfar, 0) * c.flood
-        displacement = np.maximum(dfar, 0) * c.vulnerable
-        green_gini = r["summary"]["green_space_gini"]
-        r1, r2, r3 = w.resident
-        p1, p2, p3 = w.planner
-        e1, e2, e3 = w.environment
-        q1, q2 = w.equity
-        return {
-            "resident": r1 * housing - pw * r2 * congestion + r3 * green,
-            "developer": r["far"] / np.maximum(c.ub, 1e-6) - pw * w.developer_gamma * violations,
-            "planner": p1 * tax + p2 * (1.0 - pw * congestion) - pw * p3 * public_cost,
-            "environmentalist": -e1 * impervious + pw * e2 * solar - e3 * flood,
-            "equity_advocate": -q1 * displacement - q2 * green_gini * np.ones(c.n),
+        om, w, pw, A = self.om, self.w, self.physics_weight, self.A
+        lot, c = r["lot"], r["capacity"]
+        plan = r["plan"]
+        log_acc = np.log(np.maximum(lot["access"], 1e-3))
+        congestion = np.maximum(0.0, c["vc_lot"] - self.cap.p.vc_threshold) * c["taz_violation"][self.cap.taz]
+        violations = contributing_lots(self.cap, c).astype(float)
+        sewer = np.maximum(0.0, c["sewer_util_lot"] - 1.0)
+        homes = lot["homes"] / (A * self.homes_scale)
+        aff = lot["affordable_homes"] / (A * self.homes_scale)
+        added = plan.sum(1) / A
+        carbon = (lot["embodied"] + om.p.lifecycle_years * lot["operational"]) / (A * self.carbon_scale)
+        r1, r2, r3, r4 = w.resident
+        p1, p2, p3, p4, p5 = w.planner
+        e1, e2, e3, e4 = w.environment
+        q1, q2, q3 = w.equity
+        u = {
+            "resident": r1 * log_acc + r2 * lot["mix"] - pw * (r3 * congestion + r4 * c["new_shaded"]),
+            "developer": lot["value"] / (A * self.value_scale) - pw * w.developer_gamma * violations,
+            "planner": (p1 * lot["tax"] / (A * self.tax_scale) + p2 * lot["jobs"] / (A * self.jobs_scale)
+                        + p3 * homes + p4 * lot["jh"] - pw * p5 * sewer),
+            "environmentalist": (-e1 * carbon + e2 * added * lot["transit_ok"] - e3 * added * self.cap.flood
+                                 - pw * e4 * c["shadow_imposed"]),
+            "equity_advocate": q1 * aff - q2 * added * self.vuln + q3 * log_acc * self.vuln_area,
         }
+        b = self.awareness
+        return {a: (1 - b) * v + b * v.mean() for a, v in u.items()}
 
     def step(self, proposals: Dict[str, np.ndarray]):
         if len(proposals) == 1:
             actions = np.asarray(next(iter(proposals.values())))
         else:
             actions = self.voting.aggregate(proposals)
-        self.far = self.apply(actions)
-        self.result = self.cap.evaluate(self.far)
+        self.plan = self.apply(actions)
+        self.result = self.om.evaluate(self.plan)
         new_u = self._utilities(self.result)
         rewards = {a: (new_u[a] - self.utilities[a]).astype(np.float32) for a in self.agent_types}
         self.utilities = new_u
@@ -254,7 +268,7 @@ class MARLTrainer:
         self.cfg = cfg or PPOConfig()
         torch.manual_seed(seed)
         self.rng = np.random.default_rng(seed)
-        self.agents = {a: StakeholderAgent(env.state_dim, a, self.cfg.hidden) for a in env.agent_types}
+        self.agents = {a: StakeholderAgent(env.state_dim, a, self.cfg.hidden, N_ACTIONS) for a in env.agent_types}
         self.opts = {a: torch.optim.Adam(m.parameters(), lr=self.cfg.lr) for a, m in self.agents.items()}
         self.history: List[Dict] = []
         self.resumed_from = 0
@@ -369,7 +383,8 @@ class MARLTrainer:
 
     @torch.no_grad()
     def final_plan(self, deterministic: bool = True) -> Tuple[np.ndarray, List[Dict[str, np.ndarray]]]:
-        """Roll out the trained policies greedily for one episode."""
+        """Roll out the trained policies greedily for one episode; returns the plan
+        (added sq ft by use, lots x 4) and the proposals at each step."""
         env = self.env
         s = env.reset()
         done = False
@@ -379,4 +394,4 @@ class MARLTrainer:
             props = {a: m.act(st, deterministic)[0].numpy() for a, m in self.agents.items()}
             proposals_log.append(props)
             s, _, done, _ = env.step(props)
-        return env.far.copy(), proposals_log
+        return env.plan.copy(), proposals_log

@@ -1,15 +1,22 @@
 # Manhattan experiment reported in the manuscript.
+#   pimaluos fetch-context --out data/raw/context          # public context data (manifest with SHA-256)
 #   pimaluos run --config configs/paper.yaml --pluto data/raw/nyc_mappluto_26v2_arc_shp.zip --out results/paper
 # Data: NYC DCP MapPLUTO 26v2 (shoreline-clipped shapefile, nyc_mappluto_26v2_arc_shp.zip,
 #   sha256 38b518ff2f6ccc7e2824cac30cadaf15edc9d35933eb5eae0e10dab432774ecc), downloaded 2026-10-02 from
 #   https://s-media.nyc.gov/agencies/dcp/assets/files/zip/data-tools/bytes/mappluto/nyc_mappluto_26v2_arc_shp.zip
-# Budgets are sized for a 4-core CPU (about 20 h); they are reported in the paper via generated macros.
+# Context data (walking network, destinations, jobs, population, carbon, energy benchmarking) are listed with
+# their sources and checksums in data/raw/context/manifest.json (retrieved 2026-10-07).
+# Budgets are sized for a 4-core CPU (about 24 h); they are reported in the paper via generated macros.
 city: manhattan
 pluto_release: "26v2"
 seeds: [0, 1, 2]
 gnn: {epochs: 500, lr: 0.001, patience: 500, hidden_channels: 256, embed_dim: 128, heads: 4}
 edge_ablation: {enabled: true, seeds: [0], epochs: 80}
 marl: {iterations: 200, horizon: 10, delta_far: 0.5}
+awareness: 0.5
+variants: [pimaluos, no_gnn, no_capacity_feedback, single_agent_planner, no_equity_agent, self_aware]
 nash: {enabled: true, n_lots: 200}
 voting_sensitivity: {enabled: true, developer_weights: [0.1, 0.2, 0.3, 0.4, 0.5]}
-pareto: {enabled: true, seeds: [0, 1, 2], pop_size: 120, generations: 100, n_partitions: 7}
+pareto: {enabled: true, seeds: [0, 1, 2], pop_size: 120, generations: 100, n_partitions: 2}
+uncertainty: {enabled: true, n_draws: 200}
+context: {raw_dir: data/raw/context, cache_dir: "data/processed/context_{city}"}

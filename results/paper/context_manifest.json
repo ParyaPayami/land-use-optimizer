@@ -1,0 +1,90 @@
+{
+ "facilities": {
+  "url": "https://data.cityofnewyork.us/resource/ji82-xba5.csv?borocode=1&%24limit=100000",
+  "file": "facilities/facilities.csv",
+  "sha256": "645b7a3d07dc509dd9353ab20a3c66a2a2161cb175e75427364ac2b7caea1238",
+  "bytes": 5705761,
+  "retrieved_utc": "2026-10-07T22:48:47.196410Z",
+  "cite": "NYC Department of City Planning, Facilities Database (NYC Open Data ji82-xba5)"
+ },
+ "food_stores": {
+  "url": "https://data.ny.gov/resource/9a8c-vfzj.csv?county=NEW+YORK&%24limit=100000",
+  "file": "food_stores/food_stores.csv",
+  "sha256": "0b88ec4c763ab2ac3034fb929633530b3c1f163ca0bd9e1de5f3f54e5b0897d3",
+  "bytes": 305175,
+  "retrieved_utc": "2026-10-07T22:48:47.695089Z",
+  "cite": "NYS Department of Agriculture and Markets, Retail Food Stores (data.ny.gov 9a8c-vfzj)"
+ },
+ "subway": {
+  "url": "https://data.ny.gov/resource/39hk-dx4f.csv?borough=M&%24limit=10000",
+  "file": "subway/subway_stations.csv",
+  "sha256": "ecd3b71da325b5c518c7857af48e682de638a139d552d0c21e53a165ab0c5085",
+  "bytes": 27053,
+  "retrieved_utc": "2026-10-07T22:48:53.795571Z",
+  "cite": "MTA, Subway Stations (data.ny.gov 39hk-dx4f)"
+ },
+ "parks": {
+  "url": "https://data.cityofnewyork.us/resource/enfh-gkve.geojson?borough=M&%24limit=100000",
+  "file": "parks/parks.geojson",
+  "sha256": "b47a4009e18738ef98ff794c7bbf81ef68e63fe671de14bee5cdc973afba7de8",
+  "bytes": 1391820,
+  "retrieved_utc": "2026-10-07T22:48:58.693420Z",
+  "cite": "NYC Department of Parks and Recreation, Parks Properties (enfh-gkve)"
+ },
+ "streets": {
+  "url": "https://data.cityofnewyork.us/resource/inkn-q76z.geojson?boroughcode=1&%24limit=200000",
+  "file": "streets/streets.geojson",
+  "sha256": "71945f79cafc01a51b3337a9fe6722d89fe35875b04b2e54c45e9176d1cf008b",
+  "bytes": 23182987,
+  "retrieved_utc": "2026-10-07T22:49:02.592802Z",
+  "cite": "NYC Office of Technology and Innovation, NYC Street Centerline (CSCL) (inkn-q76z)"
+ },
+ "lodes_wac": {
+  "url": "https://lehd.ces.census.gov/data/lodes/LODES8/ny/wac/ny_wac_S000_JT00_2023.csv.gz",
+  "file": "lodes_wac/ny_wac_S000_JT00_2023.csv.gz",
+  "sha256": "0274b2c3eabac9272c83674666e63d28690619a8111faf08531ecc54226d08c0",
+  "bytes": 2759201,
+  "retrieved_utc": "2026-10-07T22:49:03.512410Z",
+  "cite": "U.S. Census Bureau, LEHD Origin-Destination Employment Statistics (LODES 8), 2023"
+ },
+ "lodes_rac": {
+  "url": "https://lehd.ces.census.gov/data/lodes/LODES8/ny/rac/ny_rac_S000_JT00_2023.csv.gz",
+  "file": "lodes_rac/ny_rac_S000_JT00_2023.csv.gz",
+  "sha256": "c5963453bcff37f5a4872be7c73fc986bda1a2b193bfbe7a2c371fab09f416d1",
+  "bytes": 6261727,
+  "retrieved_utc": "2026-10-07T22:49:05.333947Z",
+  "cite": "U.S. Census Bureau, LODES 8 residence area characteristics, 2023"
+ },
+ "lodes_xwalk": {
+  "url": "https://lehd.ces.census.gov/data/lodes/LODES8/ny/ny_xwalk.csv.gz",
+  "file": "lodes_xwalk/ny_xwalk.csv.gz",
+  "sha256": "b8041bc3e4b536c861e9b1e4f77e125adc129d772febf932ab16e1fedcfa6259",
+  "bytes": 5209704,
+  "retrieved_utc": "2026-10-07T22:49:07.065590Z",
+  "cite": "U.S. Census Bureau, LODES 8 geography crosswalk"
+ },
+ "census_pl": {
+  "url": "https://www2.census.gov/programs-surveys/decennial/2020/data/01-Redistricting_File--PL_94-171/New_York/ny2020.pl.zip",
+  "file": "census_pl/ny2020.pl.zip",
+  "sha256": "9d046014bee6b61afa808c5dfe841a6d036c77bff70197472fbdd291a40b8ce2",
+  "bytes": 72608321,
+  "retrieved_utc": "2026-10-07T22:49:08.266234Z",
+  "cite": "U.S. Census Bureau, 2020 Census P.L. 94-171 Redistricting Data, New York"
+ },
+ "clf_wblca": {
+  "url": "https://ndownloader.figshare.com/files/52575179",
+  "file": "clf_wblca/buildings_metadata.xlsx",
+  "sha256": "437a09fb48d041e8d896529f95254c36addec02085ed04e9c46928b4faca63d8",
+  "bytes": 150174,
+  "retrieved_utc": "2026-10-07T22:49:09.403835Z",
+  "cite": "Carbon Leadership Forum WBLCA Benchmark Study v2 dataset, doi:10.6084/m9.figshare.28462145.v2"
+ },
+ "ll84": {
+  "url": "https://data.cityofnewyork.us/resource/5zyy-y8am.csv?%24where=report_year%3D%272024%27+AND+starts_with%28nyc_borough_block_and_lot%2C%271%27%29+AND+year_built%3E%3D%272010%27&%24limit=100000",
+  "file": "ll84/ll84_2024_manhattan_built2010plus.csv",
+  "sha256": "7a4b6726008c0818f3df11882821e5027dc388cbf158544d176cb8cc3cb9381e",
+  "bytes": 3192143,
+  "retrieved_utc": "2026-10-07T22:55:04.898087Z",
+  "cite": "NYC Mayor's Office of Climate and Environmental Justice, Energy and Water Data Disclosure for Local Law 84 (2022-present), NYC Open Data 5zyy-y8am"
+ }
+}

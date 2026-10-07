@@ -17,12 +17,16 @@ from typing import Dict, List, Optional
 import numpy as np
 import torch
 
+import pandas as pd
+
+from pimaluos.context.build import CATEGORIES, CityContext, synthetic_context
 from pimaluos.core.data_loader import ParcelDataset
 from pimaluos.core.graph_builder import ALL_EDGE_TYPES, ParcelGraphBuilder
 from pimaluos.models.agents import AGENT_TYPES, MARLTrainer, MultiAgentEnvironment, PPOConfig, UtilityWeights
 from pimaluos.models.gnn import ParcelGNN, pretrain_gnn
+from pimaluos.outcomes import OutcomeModel, OutcomeParams
 from pimaluos.physics.capacity import CapacityModel, CapacityParams
-from pimaluos.physics.verification import verify_and_repair
+from pimaluos.physics.verification import repair_plan
 
 logger = logging.getLogger(__name__)
 
@@ -34,13 +38,42 @@ def standardise(a: np.ndarray) -> np.ndarray:
     return (a - a.mean(0)) / sd
 
 
+CONTEXT_FEATURES = (["pop_density_log", "jobs_density_log"] + [f"walk_min_{c}" for c in CATEGORIES]
+                    + ["access_index_log", "jobs_housing_balance", "land_use_mix"])
+
+
+def context_features(om: OutcomeModel) -> pd.DataFrame:
+    """Standardised lot-level context features appended to the GNN node features:
+    population and job density, walking minutes to each everyday destination
+    category (capped at 60), and per-capita access, jobs-housing balance and
+    land-use mix in the lot's 15-minute walkshed."""
+    ctx, lot, A = om.ctx, om.base["lot"], np.maximum(om.A, 1.0)
+    cols = [np.log1p(ctx.pop0 / A * 1000), np.log1p(ctx.jobs0 / A * 1000)]
+    cols += [np.minimum(ctx.minutes0[om.node, k], 60.0) for k in range(len(CATEGORIES))]
+    cols += [np.log(np.maximum(lot["access"], 1e-3)), lot["jh"], lot["mix"]]
+    return pd.DataFrame(standardise(np.column_stack(cols)), columns=CONTEXT_FEATURES)
+
+
 class UrbanOptSystem:
-    def __init__(self, dataset: ParcelDataset, capacity_params: Optional[CapacityParams] = None,
+    def __init__(self, dataset: ParcelDataset, context: Optional[CityContext] = None,
+                 capacity_params: Optional[CapacityParams] = None, outcome_params: Optional[OutcomeParams] = None,
                  graph_kwargs: Optional[Dict] = None, gnn_kwargs: Optional[Dict] = None):
         self.ds = dataset
         self.graph_kwargs = graph_kwargs or {}
         self.gnn_kwargs = gnn_kwargs or {}
         self.capacity = CapacityModel(dataset.gdf, capacity_params)
+        if context is None:
+            if not dataset.meta.get("synthetic"):
+                raise ValueError("A CityContext is required for real cities (pimaluos.context.build).")
+            context = synthetic_context(dataset.gdf)
+        self.ctx = context
+        self.outcomes = OutcomeModel(dataset.gdf, self.capacity, context, outcome_params)
+        cf = context_features(self.outcomes)
+        if not set(CONTEXT_FEATURES) & set(self.ds.features.columns):
+            self.ds.features = pd.concat([self.ds.features.reset_index(drop=True), cf], axis=1)
+            self.ds.feature_names = list(self.ds.features.columns)
+            self.ds.meta["features_used"] = self.ds.feature_names
+            self.ds.meta["n_features_used"] = len(self.ds.feature_names)
         self.graph = None
         self.graph_summary: Optional[Dict] = None
         self.gnn: Optional[ParcelGNN] = None
@@ -77,11 +110,12 @@ class UrbanOptSystem:
 
     def make_env(self, use_gnn: bool = True, physics_weight: float = 1.0,
                  agent_types: Optional[List[str]] = None, horizon: int = 10, delta_far: float = 0.5,
-                 voting_weights: Optional[Dict[str, float]] = None,
+                 awareness: float = 0.5, voting_weights: Optional[Dict[str, float]] = None,
                  utility_weights: Optional[UtilityWeights] = None) -> MultiAgentEnvironment:
-        return MultiAgentEnvironment(self.capacity, self.static_state(use_gnn), agent_types or AGENT_TYPES,
+        return MultiAgentEnvironment(self.outcomes, self.static_state(use_gnn), agent_types or AGENT_TYPES,
                                      delta_far=delta_far, horizon=horizon, physics_weight=physics_weight,
-                                     voting_weights=voting_weights, utility_weights=utility_weights)
+                                     awareness=awareness, voting_weights=voting_weights,
+                                     utility_weights=utility_weights)
 
     def train_marl(self, env: MultiAgentEnvironment, iterations: int = 100, seed: int = 0,
                    ppo: Optional[PPOConfig] = None, resume_path=None) -> MARLTrainer:
@@ -95,8 +129,8 @@ class UrbanOptSystem:
         return tr.final_plan()[0]
 
     # ----------------------------------------------------------------- Verify
-    def verify(self, far: np.ndarray, **kw):
-        return verify_and_repair(self.capacity, far, **kw)
+    def verify(self, plan: np.ndarray, **kw):
+        return repair_plan(self.outcomes, plan, **kw)
 
-    def evaluate(self, far: np.ndarray) -> Dict:
-        return self.capacity.evaluate(far)["summary"]
+    def evaluate(self, plan: np.ndarray) -> Dict:
+        return self.outcomes.evaluate(plan)["summary"]
