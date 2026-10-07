@@ -163,6 +163,9 @@ class OutcomeModel:
         k_ed = CATEGORIES.index("education")
         n_ed = ctx.meta.get("n_destinations", {}).get("education", int((ctx.supply0[:, k_ed] > 0).sum()))
         svc_sites = ctx.supply0[:, k_svc].sum() + n_ed
+        # Education supply is in enrolment seats; a new site adds the mean seats per existing site.
+        self.site_supply = np.ones(len(CATEGORIES))
+        self.site_supply[k_ed] = max(ctx.supply0[:, k_ed].sum() / max(n_ed, 1), 1.0)
         if p.facility_sqft_per_site is None:
             p.facility_sqft_per_site = float(ctx.area0["facility"].sum() / max(svc_sites, 1.0))
         if p.daily_needs_share_of_retail is None:
@@ -221,7 +224,7 @@ class OutcomeModel:
         S = ctx.supply0.copy()
         S[:, K_FOOD] += self._bc(plan[:, RETAIL] * p.daily_needs_share_of_retail)
         fac_sites = self._bc(plan[:, FACILITY] / p.facility_sqft_per_site)
-        np.add.at(S, (np.arange(self.n_nodes), ctx.gap_service), fac_sites)
+        np.add.at(S, (np.arange(self.n_nodes), ctx.gap_service), fac_sites * self.site_supply[ctx.gap_service])
 
         # Two-step floating catchment area within the 15-minute walkshed.
         D = self.R @ P
