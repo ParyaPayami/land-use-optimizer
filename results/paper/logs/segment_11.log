@@ -1,0 +1,61 @@
+/tmp/claude-0/-home-user-land-use-optimizer/55a57e04-5bce-5ab2-9230-31fff4b670d2/scratchpad/venv/lib/python3.11/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+2026-10-08 18:10:15,657 pimaluos.core.data_loader Dropping 5 constant features: ['historic_district', 'irregular_lot', 'landmark', 'special_district', 'split_zone']
+2026-10-08 18:10:23,233 pimaluos.core.graph_builder spatial_adjacency: 154834 directed edges
+2026-10-08 18:10:23,460 pimaluos.core.graph_builder proximity: 383320 directed edges
+2026-10-08 18:10:23,565 pimaluos.core.graph_builder functional_similarity: 156872 directed edges
+2026-10-08 18:10:24,147 pimaluos.core.graph_builder street_frontage: 100170 directed edges
+2026-10-08 18:10:24,316 pimaluos.core.graph_builder regulatory_coupling: 248310 directed edges
+2026-10-08 18:10:25,176 pimaluos.experiments === seed 0: loaded from checkpoint ===
+2026-10-08 18:10:25,177 pimaluos.experiments === seed 1 ===
+2026-10-08 18:10:25,252 pimaluos.experiments seed 1: GNN loaded from stage checkpoint
+2026-10-08 18:10:29,484 pimaluos.experiments seed 1: MARL variant pimaluos loaded from stage checkpoint
+2026-10-08 18:10:32,051 pimaluos.experiments seed 1: MARL variant no_gnn loaded from stage checkpoint
+2026-10-08 18:10:38,132 pimaluos.experiments seed 1: MARL variant no_capacity_feedback loaded from stage checkpoint
+2026-10-08 18:10:44,827 pimaluos.experiments seed 1: MARL variant single_agent_planner loaded from stage checkpoint
+2026-10-08 18:10:50,297 pimaluos.experiments seed 1: MARL variant no_equity_agent loaded from stage checkpoint
+2026-10-08 18:10:56,304 pimaluos.pipeline MARL resumed at iteration 5
+2026-10-08 18:11:25,939 pimaluos.pipeline MARL it 5 returns {'resident': 0.0932, 'developer': 1.0541, 'planner': 1.9595, 'environmentalist': -1.1657, 'equity_advocate': 0.4767} added_fa 502371526
+2026-10-08 18:13:58,852 pimaluos.pipeline MARL it 10 returns {'resident': -1.3059, 'developer': 1.4254, 'planner': 2.4937, 'environmentalist': -1.2786, 'equity_advocate': -0.5759} added_fa 597789018
+2026-10-08 18:16:35,488 pimaluos.pipeline MARL it 15 returns {'resident': -1.8416, 'developer': 1.5607, 'planner': 2.7238, 'environmentalist': -1.3631, 'equity_advocate': -0.9854} added_fa 699864690
+2026-10-08 18:19:07,934 pimaluos.pipeline MARL it 20 returns {'resident': -1.9284, 'developer': 1.617, 'planner': 2.8259, 'environmentalist': -1.4059, 'equity_advocate': -1.0387} added_fa 724250781
+2026-10-08 18:21:44,365 pimaluos.pipeline MARL it 25 returns {'resident': -1.9625, 'developer': 1.6214, 'planner': 2.8479, 'environmentalist': -1.4145, 'equity_advocate': -1.0636} added_fa 740118297
+2026-10-08 18:24:16,172 pimaluos.pipeline MARL it 30 returns {'resident': -2.2382, 'developer': 1.6395, 'planner': 2.8664, 'environmentalist': -1.4237, 'equity_advocate': -1.3138} added_fa 751807772
+2026-10-08 18:26:38,593 pimaluos.pipeline MARL it 35 returns {'resident': -2.3381, 'developer': 1.6579, 'planner': 2.8835, 'environmentalist': -1.4276, 'equity_advocate': -1.4138} added_fa 755765823
+2026-10-08 18:29:00,475 pimaluos.pipeline MARL it 40 returns {'resident': -2.2717, 'developer': 1.6715, 'planner': 2.9138, 'environmentalist': -1.436, 'equity_advocate': -1.3546} added_fa 781035791
+2026-10-08 18:31:21,412 pimaluos.pipeline MARL it 45 returns {'resident': -2.3953, 'developer': 1.6912, 'planner': 2.9317, 'environmentalist': -1.4385, 'equity_advocate': -1.4719} added_fa 764426841
+2026-10-08 18:33:50,471 pimaluos.pipeline MARL it 50 returns {'resident': -2.3942, 'developer': 1.7013, 'planner': 2.9503, 'environmentalist': -1.446, 'equity_advocate': -1.4782} added_fa 791450932
+2026-10-08 18:36:17,672 pimaluos.pipeline MARL it 55 returns {'resident': -2.5076, 'developer': 1.7157, 'planner': 2.9704, 'environmentalist': -1.4541, 'equity_advocate': -1.5809} added_fa 785799402
+2026-10-08 18:38:46,164 pimaluos.pipeline MARL it 60 returns {'resident': -2.4948, 'developer': 1.7077, 'planner': 2.9607, 'environmentalist': -1.453, 'equity_advocate': -1.5668} added_fa 790849717
+2026-10-08 18:41:27,168 pimaluos.pipeline MARL it 65 returns {'resident': -2.5704, 'developer': 1.7144, 'planner': 2.9658, 'environmentalist': -1.4554, 'equity_advocate': -1.6462} added_fa 803204641
+2026-10-08 18:44:09,812 pimaluos.pipeline MARL it 70 returns {'resident': -2.5644, 'developer': 1.7076, 'planner': 2.9711, 'environmentalist': -1.4563, 'equity_advocate': -1.6471} added_fa 810873610
+2026-10-08 18:46:53,161 pimaluos.pipeline MARL it 75 returns {'resident': -2.5854, 'developer': 1.7024, 'planner': 2.9667, 'environmentalist': -1.4567, 'equity_advocate': -1.6694} added_fa 804837434
+2026-10-08 18:49:27,892 pimaluos.pipeline MARL it 80 returns {'resident': -2.5986, 'developer': 1.6987, 'planner': 2.9683, 'environmentalist': -1.4588, 'equity_advocate': -1.679} added_fa 816927621
+2026-10-08 18:51:58,552 pimaluos.pipeline MARL it 85 returns {'resident': -2.5674, 'developer': 1.717, 'planner': 2.9718, 'environmentalist': -1.4597, 'equity_advocate': -1.6544} added_fa 830974330
+2026-10-08 18:54:33,087 pimaluos.pipeline MARL it 90 returns {'resident': -2.5754, 'developer': 1.7087, 'planner': 2.9794, 'environmentalist': -1.4636, 'equity_advocate': -1.6661} added_fa 833005936
+2026-10-08 18:57:04,375 pimaluos.pipeline MARL it 95 returns {'resident': -2.555, 'developer': 1.7246, 'planner': 2.9841, 'environmentalist': -1.4613, 'equity_advocate': -1.6387} added_fa 829164597
+2026-10-08 18:59:27,211 pimaluos.pipeline MARL it 100 returns {'resident': -2.5866, 'developer': 1.7153, 'planner': 2.9904, 'environmentalist': -1.4656, 'equity_advocate': -1.6761} added_fa 841016110
+2026-10-08 19:01:53,668 pimaluos.pipeline MARL it 105 returns {'resident': -2.6292, 'developer': 1.7205, 'planner': 2.9967, 'environmentalist': -1.4643, 'equity_advocate': -1.7202} added_fa 824131569
+2026-10-08 19:04:17,755 pimaluos.pipeline MARL it 110 returns {'resident': -2.6068, 'developer': 1.7216, 'planner': 2.9999, 'environmentalist': -1.4674, 'equity_advocate': -1.6982} added_fa 837548997
+2026-10-08 19:06:40,764 pimaluos.pipeline MARL it 115 returns {'resident': -2.5892, 'developer': 1.7209, 'planner': 2.9968, 'environmentalist': -1.4671, 'equity_advocate': -1.6757} added_fa 841133522
+2026-10-08 19:09:04,561 pimaluos.pipeline MARL it 120 returns {'resident': -2.5712, 'developer': 1.7244, 'planner': 3.006, 'environmentalist': -1.4701, 'equity_advocate': -1.6627} added_fa 840579176
+2026-10-08 19:11:31,592 pimaluos.pipeline MARL it 125 returns {'resident': -2.6237, 'developer': 1.725, 'planner': 3.0086, 'environmentalist': -1.4696, 'equity_advocate': -1.7085} added_fa 831413613
+2026-10-08 19:13:58,280 pimaluos.pipeline MARL it 130 returns {'resident': -2.6353, 'developer': 1.7255, 'planner': 3.0024, 'environmentalist': -1.4691, 'equity_advocate': -1.7266} added_fa 825054529
+2026-10-08 19:16:27,674 pimaluos.pipeline MARL it 135 returns {'resident': -2.5881, 'developer': 1.7295, 'planner': 3.0115, 'environmentalist': -1.4717, 'equity_advocate': -1.676} added_fa 834057770
+2026-10-08 19:18:45,543 pimaluos.pipeline MARL it 140 returns {'resident': -2.627, 'developer': 1.7356, 'planner': 3.0191, 'environmentalist': -1.4759, 'equity_advocate': -1.7087} added_fa 832409341
+2026-10-08 19:21:10,847 pimaluos.pipeline MARL it 145 returns {'resident': -2.6376, 'developer': 1.7313, 'planner': 3.0147, 'environmentalist': -1.4723, 'equity_advocate': -1.721} added_fa 845145161
+2026-10-08 19:23:34,327 pimaluos.pipeline MARL it 150 returns {'resident': -2.6129, 'developer': 1.7302, 'planner': 3.0154, 'environmentalist': -1.4733, 'equity_advocate': -1.6934} added_fa 843711604
+2026-10-08 19:25:55,696 pimaluos.pipeline MARL it 155 returns {'resident': -2.6357, 'developer': 1.7477, 'planner': 3.0156, 'environmentalist': -1.4746, 'equity_advocate': -1.7191} added_fa 831891509
+2026-10-08 19:28:15,969 pimaluos.pipeline MARL it 160 returns {'resident': -2.5968, 'developer': 1.748, 'planner': 3.0186, 'environmentalist': -1.4757, 'equity_advocate': -1.6821} added_fa 844009860
+2026-10-08 19:30:35,285 pimaluos.pipeline MARL it 165 returns {'resident': -2.5883, 'developer': 1.7332, 'planner': 3.0183, 'environmentalist': -1.4748, 'equity_advocate': -1.6773} added_fa 830321584
+2026-10-08 19:32:51,128 pimaluos.pipeline MARL it 170 returns {'resident': -2.5918, 'developer': 1.7387, 'planner': 3.0231, 'environmentalist': -1.4768, 'equity_advocate': -1.6769} added_fa 831936905
+2026-10-08 19:35:07,085 pimaluos.pipeline MARL it 175 returns {'resident': -2.6128, 'developer': 1.7296, 'planner': 3.0095, 'environmentalist': -1.4718, 'equity_advocate': -1.696} added_fa 827787841
+2026-10-08 19:37:28,006 pimaluos.pipeline MARL it 180 returns {'resident': -2.571, 'developer': 1.7386, 'planner': 3.0089, 'environmentalist': -1.4691, 'equity_advocate': -1.6576} added_fa 826657752
+2026-10-08 19:39:51,907 pimaluos.pipeline MARL it 185 returns {'resident': -2.5301, 'developer': 1.7118, 'planner': 2.9925, 'environmentalist': -1.4659, 'equity_advocate': -1.6144} added_fa 825105673
+2026-10-08 19:42:17,966 pimaluos.pipeline MARL it 190 returns {'resident': -2.603, 'developer': 1.7334, 'planner': 2.9985, 'environmentalist': -1.4658, 'equity_advocate': -1.6797} added_fa 824303978
+2026-10-08 19:44:41,349 pimaluos.pipeline MARL it 195 returns {'resident': -2.5965, 'developer': 1.7217, 'planner': 3.0063, 'environmentalist': -1.4688, 'equity_advocate': -1.6795} added_fa 818677428
+2026-10-08 19:46:35,209 pimaluos.pipeline MARL it 199 returns {'resident': -2.6083, 'developer': 1.7223, 'planner': 3.0057, 'environmentalist': -1.4698, 'equity_advocate': -1.6941} added_fa 817999589
+2026-10-08 19:49:43,300 pimaluos.experiments === seed 2 ===
+2026-10-08 19:50:09,592 pimaluos.pipeline GNN epoch 0 train 1.0940 val 0.8981
+2026-10-08 19:58:23,423 pimaluos.pipeline GNN epoch 25 train 0.5328 val 0.4697
+2026-10-08 20:06:12,085 pimaluos.pipeline GNN epoch 50 train 0.4333 val 0.3973
