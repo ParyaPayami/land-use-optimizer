@@ -1,0 +1,35 @@
+/tmp/claude-0/-home-user-land-use-optimizer/55a57e04-5bce-5ab2-9230-31fff4b670d2/scratchpad/venv/lib/python3.11/site-packages/torch/jit/_script.py:1491: FutureWarning: `torch.jit.script` is deprecated. Please switch to `torch.compile` or `torch.export`.
+  warnings.warn(
+2026-10-07 23:12:19,551 pimaluos.core.data_loader Dropping 5 constant features: ['historic_district', 'irregular_lot', 'landmark', 'special_district', 'split_zone']
+2026-10-07 23:12:26,911 pimaluos.core.graph_builder spatial_adjacency: 154834 directed edges
+2026-10-07 23:12:27,150 pimaluos.core.graph_builder proximity: 383320 directed edges
+2026-10-07 23:12:27,244 pimaluos.core.graph_builder functional_similarity: 156872 directed edges
+2026-10-07 23:12:27,548 pimaluos.core.graph_builder street_frontage: 100170 directed edges
+2026-10-07 23:12:27,639 pimaluos.core.graph_builder regulatory_coupling: 248310 directed edges
+2026-10-07 23:12:28,006 pimaluos.experiments === seed 0 ===
+2026-10-07 23:12:49,906 pimaluos.pipeline GNN epoch 0 train 1.1076 val 0.9510
+2026-10-07 23:20:07,140 pimaluos.pipeline GNN epoch 25 train 0.5219 val 0.5053
+2026-10-07 23:25:54,640 pimaluos.pipeline GNN epoch 50 train 0.4783 val 0.4343
+2026-10-07 23:31:14,303 pimaluos.pipeline GNN epoch 75 train 0.4479 val 0.4075
+2026-10-07 23:36:28,579 pimaluos.pipeline GNN epoch 100 train 0.4013 val 0.3952
+2026-10-07 23:42:00,607 pimaluos.pipeline GNN epoch 125 train 0.4022 val 0.3893
+2026-10-07 23:47:21,332 pimaluos.pipeline GNN epoch 150 train 0.3994 val 0.3848
+2026-10-07 23:52:45,971 pimaluos.pipeline GNN epoch 175 train 0.3876 val 0.3797
+2026-10-07 23:58:11,935 pimaluos.pipeline GNN epoch 200 train 0.3907 val 0.3782
+2026-10-08 00:03:36,554 pimaluos.pipeline GNN epoch 225 train 0.3631 val 0.3760
+2026-10-08 00:09:05,362 pimaluos.pipeline GNN epoch 250 train 0.3810 val 0.3751
+2026-10-08 00:14:31,183 pimaluos.pipeline GNN epoch 275 train 0.3836 val 0.3733
+2026-10-08 00:20:10,819 pimaluos.pipeline GNN epoch 300 train 0.3694 val 0.3726
+2026-10-08 00:25:37,577 pimaluos.pipeline GNN epoch 325 train 0.3976 val 0.3714
+2026-10-08 00:31:15,734 pimaluos.pipeline GNN epoch 350 train 0.3901 val 0.3708
+2026-10-08 00:36:33,937 pimaluos.pipeline GNN epoch 375 train 0.3620 val 0.3706
+2026-10-08 00:42:00,216 pimaluos.pipeline GNN epoch 400 train 0.4061 val 0.3699
+2026-10-08 00:47:38,261 pimaluos.pipeline GNN epoch 425 train 0.3446 val 0.3696
+2026-10-08 00:53:25,086 pimaluos.pipeline GNN epoch 450 train 0.3482 val 0.3693
+2026-10-08 00:58:56,644 pimaluos.pipeline GNN epoch 475 train 0.3466 val 0.3692
+2026-10-08 01:04:06,811 pimaluos.pipeline GNN epoch 499 train 0.4029 val 0.3691
+2026-10-08 01:04:25,130 pimaluos.pipeline MARL it 0 returns {'resident': 1.938, 'developer': 0.5119, 'planner': 1.2141, 'environmentalist': -1.2334, 'equity_advocate': 1.8538} added_fa 448175282
+2026-10-08 01:05:43,597 pimaluos.pipeline MARL it 5 returns {'resident': 0.2916, 'developer': 0.9393, 'planner': 1.7592, 'environmentalist': -1.0704, 'equity_advocate': 0.5663} added_fa 460086222
+2026-10-08 01:07:01,299 pimaluos.pipeline MARL it 10 returns {'resident': -0.8998, 'developer': 1.3114, 'planner': 2.3075, 'environmentalist': -1.1831, 'equity_advocate': -0.2652} added_fa 532621318
+2026-10-08 01:08:19,818 pimaluos.pipeline MARL it 15 returns {'resident': -1.4517, 'developer': 1.5114, 'planner': 2.6119, 'environmentalist': -1.3059, 'equity_advocate': -0.6611} added_fa 602495945
+2026-10-08 01:09:37,198 pimaluos.pipeline MARL it 20 returns {'resident': -1.7327, 'developer': 1.5959, 'planner': 2.7727, 'environmentalist': -1.3708, 'equity_advocate': -0.88} added_fa 669274408
