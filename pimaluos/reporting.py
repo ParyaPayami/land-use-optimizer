@@ -82,6 +82,9 @@ MACROS = [
     "KneeHomesK", "KneeAffHomesK", "KneeAccess", "KneeJobsK", "KneeCarbonMt",
     # budgets
     "GnnPatience", "MarlIters", "MarlHorizon", "AblEpochs", "Awareness",
+    # learning dynamics of the PIMALUOS variant (seed means)
+    "MarlChangeLastTenPct", "MarlChangeLastFiftyPct", "MarlFAFirstM", "MarlFALastM",
+] + [f"Marl{a}{w}" for a in ("Res", "Dev", "Pla", "Env", "Eq") for w in ("First", "Last")] + [
     # timings / hardware
     "TimeTotalH", "GnnSecPerEpoch", "MarlSecPerIter", "AblMinPerConfig", "ParetoMinPerRun", "TimeGraphS",
     "Hardware", "TorchVersion",
@@ -502,6 +505,36 @@ def fig_map(results: Path, out: Path):
     plt.close(fig)
 
 
+MARL_AGENT_MACRO = {"resident": "Res", "developer": "Dev", "planner": "Pla", "environmentalist": "Env",
+                    "equity_advocate": "Eq"}
+
+
+def marl_macros(marl: Dict, variant: str = "pimaluos") -> Dict[str, str]:
+    """Seed-mean returns of each stakeholder at the first and last iteration, the largest
+    relative change of a stakeholder's return over the last 10 and 50 iterations, and the
+    floor area proposed at the first and last iteration."""
+    hist = [marl[s][variant] for s in marl if variant in marl[s]]
+    if not hist:
+        return {}
+    n = min(len(h) for h in hist)
+    out: Dict[str, str] = {}
+    changes = {10: [], 50: []}
+    for a, mm in MARL_AGENT_MACRO.items():
+        r = np.array([[it["returns"][a] for it in h[:n]] for h in hist if a in h[0]["returns"]])
+        if not len(r):
+            continue
+        mean = r.mean(0)
+        out[f"Marl{mm}First"], out[f"Marl{mm}Last"] = _fmt(float(mean[0]), 2), _fmt(float(mean[-1]), 2)
+        for k in changes:
+            if n > k:
+                changes[k].append(abs(mean[-1] - mean[-1 - k]) / max(abs(mean[-1 - k]), 1e-9))
+    for k, name in ((10, "MarlChangeLastTenPct"), (50, "MarlChangeLastFiftyPct")):
+        out[name] = _fmt(100 * max(changes[k]), 1) if changes[k] else TBD  # undefined for short runs
+    fa = np.array([[it["added_floor_area_sqft"] for it in h[:n]] for h in hist]).mean(0)
+    out.update(MarlFAFirstM=_fmt(float(fa[0]) / 1e6, 0), MarlFALastM=_fmt(float(fa[-1]) / 1e6, 0))
+    return out
+
+
 # --------------------------------------------------------------------- main
 def make_report(results: Path, out: Path) -> Dict[str, str]:
     out.mkdir(parents=True, exist_ok=True)
@@ -609,6 +642,7 @@ def make_report(results: Path, out: Path) -> Dict[str, str]:
         fig_tradeoff(df, pareto, out)
     if marl:
         fig_marl(marl, out)
+        v.update(marl_macros(marl))
     if nash:
         S = [nash[s]["summary"] for s in nash]
         v.update(NashLots=_fmt(S[0]["n_lots"]), NashNontrivial=_pm([s["n_nontrivial"] for s in S], 0),
