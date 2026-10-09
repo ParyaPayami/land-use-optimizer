@@ -59,7 +59,7 @@ DEFAULT_CONFIG = {
     "edge_ablation": {"enabled": True, "seeds": [0, 1, 2], "epochs": 150},
     "marl": {"iterations": 100, "horizon": 10, "delta_far": 0.5, "ppo": {}},
     "variants": ["pimaluos", "no_gnn", "no_capacity_feedback", "single_agent_planner", "no_equity_agent",
-                 "self_aware"],
+                 "self_aware", "borda"],
     "awareness": 0.5,
     "baseline_horizon": 10,
     "nash": {"enabled": True, "n_lots": 200},
@@ -206,6 +206,7 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
         "no_equity_agent": dict(use_gnn=True, physics_weight=1.0,
                                 agent_types=[a for a in AGENT_TYPES if a != "equity_advocate"], awareness=aw),
         "self_aware": dict(use_gnn=True, physics_weight=1.0, agent_types=AGENT_TYPES, awareness=0.0),
+        "borda": dict(use_gnn=True, physics_weight=1.0, agent_types=AGENT_TYPES, awareness=aw, voting_rule="borda"),
     }
     timings.update(gnn_s=0.0, marl_s=0.0, gnn_epochs=0, marl_iters=0)
     ckpt_dir = out_dir / "checkpoints"
@@ -269,7 +270,8 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             spec = variant_specs[v]
             env = sysm.make_env(use_gnn=spec["use_gnn"], physics_weight=spec["physics_weight"],
                                 agent_types=spec["agent_types"], horizon=mcfg["horizon"],
-                                delta_far=mcfg["delta_far"], awareness=spec["awareness"])
+                                delta_far=mcfg["delta_far"], awareness=spec["awareness"],
+                                voting_rule=spec.get("voting_rule", "plurality"))
             v_ck = ckpt_dir / f"seed_{seed}_{v}.pt"
             if v_ck.exists():
                 st = torch.load(v_ck, weights_only=False)
@@ -407,6 +409,8 @@ def run_all(config: Dict, out_dir: Path, pluto_path: Optional[str] = None) -> Pa
             compare.update(pimaluos=seed0["pimaluos"]["plan"], pimaluos_verified=seed0["pimaluos"]["plan_verified"])
         compare.update({f"{k}_verified": seed0[k]["plan_verified"] for k in ("buildout_market", "buildout_uap")
                         if k in seed0})
+        if (out_dir / "plans" / "borda.npz").exists():
+            compare["borda_verified"] = np.load(out_dir / "plans" / "borda.npz")["plan_verified"]
         f_plans = {k: plan_objectives(om, f)[0] for k, f in compare.items()}
         for runs in par.values():
             for e in runs.values():

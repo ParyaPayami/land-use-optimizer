@@ -13,7 +13,10 @@ Decision
 Agents
     Five stakeholder types, each with one policy shared over all lots
     (parameter sharing). Every agent proposes an action for every lot; the
-    proposals are aggregated by :class:`ConsensusVotingMechanism`.
+    proposals are aggregated by :class:`ConsensusVotingMechanism`, either by
+    weighted plurality (each agent's sampled action is its vote) or by a
+    weighted Borda count (each agent ranks all actions: its sampled action
+    first, the others by its policy's probabilities).
 
 State (per lot)
     GNN embedding (or standardised raw features in the No-GNN ablation) and
@@ -75,19 +78,38 @@ class UtilityWeights:
     equity: Tuple[float, float, float] = (2.0, 1.0, 5.0)  # affordable, vulnerable, access
 
 
-class ConsensusVotingMechanism:
-    """Weighted plurality vote per lot; ties resolve to the status quo (keep)."""
+VOTING_RULES = ("plurality", "borda")
 
-    def __init__(self, weights: Optional[Dict[str, float]] = None, n_actions: int = N_ACTIONS):
+
+class ConsensusVotingMechanism:
+    """Weighted vote per lot; ties resolve to the status quo (keep).
+
+    ``plurality``: each proposal is one action per lot (``[n]``), worth the agent's weight.
+    ``borda``: each proposal is a ranking of all actions per lot (``[n, n_actions]``, best
+    first); the action in position r earns ``weight * (n_actions - 1 - r)`` points.
+    """
+
+    def __init__(self, weights: Optional[Dict[str, float]] = None, n_actions: int = N_ACTIONS,
+                 rule: str = "plurality"):
+        if rule not in VOTING_RULES:
+            raise ValueError(f"unknown voting rule {rule!r}; choose from {VOTING_RULES}")
         self.weights = dict(weights or DEFAULT_VOTING_WEIGHTS)
         self.n_actions = n_actions
+        self.rule = rule
 
     def aggregate(self, proposals: Dict[str, np.ndarray]) -> np.ndarray:
         agents = list(proposals)
         n = len(proposals[agents[0]])
         score = np.zeros((n, self.n_actions))
+        rows = np.arange(n)
         for a in agents:
-            score[np.arange(n), np.asarray(proposals[a])] += self.weights.get(a, 0.0)
+            w = self.weights.get(a, 0.0)
+            p = np.asarray(proposals[a])
+            if self.rule == "borda":
+                points = (self.n_actions - 1 - np.arange(p.shape[1])).astype(float)
+                np.add.at(score, (rows[:, None], p), w * points[None, :])
+            else:
+                score[rows, p] += w
         best = score.max(1, keepdims=True)
         winners = np.isclose(score, best)
         out = np.argmax(score, axis=1)
@@ -118,6 +140,14 @@ class StakeholderAgent(nn.Module):
         a = d.probs.argmax(-1) if deterministic else d.sample()
         return a, d.log_prob(a), self.critic(s).squeeze(-1)
 
+    @torch.no_grad()
+    def ranking(self, s: torch.Tensor, first: torch.Tensor) -> np.ndarray:
+        """Ballot for a ranked vote: ``first`` (the action taken) at the top, the other
+        actions by decreasing policy probability. Returns ``[n, n_actions]``."""
+        p = self.dist(s).probs.clone()
+        p[torch.arange(p.shape[0]), first] = 2.0
+        return torch.argsort(p, dim=1, descending=True, stable=True).numpy()
+
 
 class MultiAgentEnvironment:
     """Vectorised multi-lot, multi-use planning environment over the outcome model."""
@@ -133,6 +163,7 @@ class MultiAgentEnvironment:
         awareness: float = 0.5,
         voting_weights: Optional[Dict[str, float]] = None,
         utility_weights: Optional[UtilityWeights] = None,
+        voting_rule: str = "plurality",
     ):
         self.om = outcomes
         self.cap = outcomes.cap
@@ -143,7 +174,7 @@ class MultiAgentEnvironment:
         self.horizon = horizon
         self.physics_weight = physics_weight
         self.awareness = awareness
-        self.voting = ConsensusVotingMechanism(voting_weights)
+        self.voting = ConsensusVotingMechanism(voting_weights, rule=voting_rule)
         self.w = utility_weights or UtilityWeights()
         self.state_dim = self.static.shape[1] + N_DYNAMIC
         om, A = outcomes, outcomes.A
@@ -229,6 +260,8 @@ class MultiAgentEnvironment:
     def step(self, proposals: Dict[str, np.ndarray]):
         if len(proposals) == 1:
             actions = np.asarray(next(iter(proposals.values())))
+            if actions.ndim == 2:  # a single ranked ballot: its first choice
+                actions = actions[:, 0]
         else:
             actions = self.voting.aggregate(proposals)
         self.plan = self.apply(actions)
@@ -273,6 +306,10 @@ class MARLTrainer:
         self.history: List[Dict] = []
         self.resumed_from = 0
 
+    def _ballot(self, m: StakeholderAgent, st: torch.Tensor, act: torch.Tensor) -> np.ndarray:
+        """The agent's vote: its action (plurality) or a full ranking led by it (Borda)."""
+        return m.ranking(st, act) if self.env.voting.rule == "borda" else act.numpy()
+
     def _rollout(self):
         env = self.env
         s = env.reset()
@@ -283,7 +320,7 @@ class MARLTrainer:
             props = {}
             for a, m in self.agents.items():
                 act, lp, v = m.act(st)
-                props[a] = act.numpy()
+                props[a] = self._ballot(m, st, act)
                 buf[a]["s"].append(st)
                 buf[a]["a"].append(act)
                 buf[a]["lp"].append(lp)
@@ -391,7 +428,10 @@ class MARLTrainer:
         proposals_log = []
         while not done:
             st = torch.from_numpy(s)
-            props = {a: m.act(st, deterministic)[0].numpy() for a, m in self.agents.items()}
+            props = {}
+            for a, m in self.agents.items():
+                act = m.act(st, deterministic)[0]
+                props[a] = self._ballot(m, st, act)
             proposals_log.append(props)
             s, _, done, _ = env.step(props)
         return env.plan.copy(), proposals_log

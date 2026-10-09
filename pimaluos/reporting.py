@@ -27,7 +27,8 @@ TBD = r"\textbf{[TBD]}"
 # \PimVs<Method><Outcome>Pct (percentage difference of repaired PIMALUOS vs the repaired method).
 METHOD_MACRO = {"status_quo": "Sq", "random": "Rand", "rule_based": "Rule", "buildout_market": "BoMkt",
                 "buildout_uap": "BoUap", "pimaluos": "Pim", "no_gnn": "NoGnn", "no_capacity_feedback": "NoCap",
-                "single_agent_planner": "Single", "no_equity_agent": "NoEq", "self_aware": "SelfAware"}
+                "single_agent_planner": "Single", "no_equity_agent": "NoEq", "self_aware": "SelfAware",
+                "borda": "Borda"}
 OUTCOME_MACRO = {  # metric: (suffix, scale, decimals)
     "homes_added": ("HomesK", 1e-3, 1), "affordable_homes_added": ("AffHomesK", 1e-3, 1),
     "affordable_share": ("AffSharePct", 100, 1), "access_index": ("Access", 1, 3),
@@ -42,7 +43,7 @@ OUTCOME_MACRO = {  # metric: (suffix, scale, decimals)
     "catchments_over_capacity": ("Sewer", 1, 1), "repair_iterations": ("RepairIt", 1, 1),
 }
 COMPARATORS = ["random", "rule_based", "buildout_market", "buildout_uap", "no_gnn", "no_capacity_feedback",
-               "single_agent_planner", "no_equity_agent", "self_aware"]
+               "single_agent_planner", "no_equity_agent", "self_aware", "borda"]
 UNC_COMPARATORS = ["buildout_market", "buildout_uap", "rule_based", "no_capacity_feedback", "single_agent_planner"]
 UNC_OUTCOMES = {"homes_added": "Homes", "affordable_homes_added": "AffHomes", "access_index": "Access",
                 "residents_full_15min_share": "Full", "jobs_added": "Jobs", "tax_revenue_musd": "Tax",
@@ -74,11 +75,11 @@ MACROS = [
     "GnnValLoss", "GnnMeanPredLoss", "GnnNoGraphLoss", "GnnEpochs", "GnnBestEpoch",
     # Nash
     "NashLots", "NashNontrivial", "NashShareSincereOpt", "NashLossSincere", "NashLossWorstNE",
-    "NashMedianPoA", "NashPoaDefined", "NashMeanNE",
+    "NashMedianPoA", "NashPoaDefined", "NashMeanNE", "NashShareSincereBordaOpt", "NashLossSincereBorda",
     # Pareto
     "ParetoPop", "ParetoGen", "ParetoRefDirs", "ParetoNCold", "ParetoNSeeded", "HVCold", "HVSeeded",
     "ParetoColdInBox", "ParetoColdFeasible", "ParetoSeededFeasible",
-    "ParetoDomPim", "ParetoDomPimVer", "ParetoDomBoMktVer", "ParetoDomBoUapVer",
+    "ParetoDomPim", "ParetoDomPimVer", "ParetoDomBoMktVer", "ParetoDomBoUapVer", "ParetoDomBordaVer",
     "KneeHomesK", "KneeAffHomesK", "KneeAccess", "KneeJobsK", "KneeCarbonMt", "KneeShaded", "KneeVulnM", "KneeJH",
     "ParetoRhoAffAccess", "ParetoNSeededTotal", "ParetoShareAccessAboveBase",
     # budgets
@@ -86,6 +87,7 @@ MACROS = [
     # learning dynamics of the PIMALUOS variant (seed means)
     "MarlChangeLastTenPct", "MarlChangeLastFiftyPct", "MarlFAFirstM", "MarlFALastM",
 ] + [f"Marl{a}{w}" for a in ("Res", "Dev", "Pla", "Env", "Eq") for w in ("First", "Last")] + [
+    f"MarlBorda{a}Last" for a in ("Res", "Dev", "Pla", "Env", "Eq")] + ["MarlBordaFALastM"] + [
     # timings / hardware
     "TimeTotalH", "GnnSecPerEpoch", "MarlSecPerIter", "AblMinPerConfig", "ParetoMinPerRun", "TimeGraphS",
     "Hardware", "TorchVersion",
@@ -302,7 +304,8 @@ METHOD_ROWS = [("status_quo", "Status quo"), ("random", "Random"), ("rule_based"
                ("pimaluos", "PIMALUOS"), ("no_gnn", "\\quad No GNN"),
                ("no_capacity_feedback", "\\quad No capacity feedback"),
                ("single_agent_planner", "\\quad Single agent (planner)"),
-               ("no_equity_agent", "\\quad No equity agent"), ("self_aware", "\\quad Self-aware agents")]
+               ("no_equity_agent", "\\quad No equity agent"), ("self_aware", "\\quad Self-aware agents"),
+               ("borda", "\\quad Borda vote")]
 
 
 def _rows(df: pd.DataFrame, cols, out: Path, name: str):
@@ -410,7 +413,7 @@ def fig_pillars(df: pd.DataFrame, out: Path):
     plt = _style()
     shown = [("rule_based", "Rule-based growth", GREY, ":"), ("buildout_market", "Build-out, market", GREY, "--"),
              ("buildout_uap", "Build-out with UAP", INK, "--"), ("pimaluos", "PIMALUOS", SERIES[0], "-"),
-             ("no_capacity_feedback", "No capacity feedback", SERIES[1], "-"),
+             ("borda", "Borda vote", SERIES[1], "-"),
              ("single_agent_planner", "Single agent", SERIES[2], "-")]
     means = {}
     for m, *_ in shown:
@@ -644,6 +647,11 @@ def make_report(results: Path, out: Path) -> Dict[str, str]:
     if marl:
         fig_marl(marl, out)
         v.update(marl_macros(marl))
+        mb = marl_macros(marl, "borda")
+        v.update({k.replace("Marl", "MarlBorda", 1): x for k, x in mb.items()
+                  if k.endswith("Last") and not k.startswith("MarlFA")})
+        if "MarlFALastM" in mb:
+            v["MarlBordaFALastM"] = mb["MarlFALastM"]
     if nash:
         S = [nash[s]["summary"] for s in nash]
         v.update(NashLots=_fmt(S[0]["n_lots"]), NashNontrivial=_pm([s["n_nontrivial"] for s in S], 0),
@@ -653,6 +661,9 @@ def make_report(results: Path, out: Path) -> Dict[str, str]:
                  NashMedianPoA=_pm([s["median_poa"] for s in S], 2),
                  NashPoaDefined=_pm([100 * s["share_poa_defined"] for s in S], 1),
                  NashMeanNE=_pm([s["mean_ne_outcomes"] for s in S], 2))
+        if all("share_sincere_borda_optimal" in s for s in S):
+            v.update(NashShareSincereBordaOpt=_pm([100 * s["share_sincere_borda_optimal"] for s in S], 1),
+                     NashLossSincereBorda=_pm([s["mean_welfare_loss_sincere_borda"] for s in S], 3))
     if vote:
         table_voting(vote, out)
     if pareto:
@@ -673,7 +684,7 @@ def make_report(results: Path, out: Path) -> Dict[str, str]:
                  if all("n_in_reference_box" in p["cold"] for p in P) else TBD)
         for key, plan in [("ParetoDomPim", "pimaluos"), ("ParetoDomPimVer", "pimaluos_verified"),
                           ("ParetoDomBoMktVer", "buildout_market_verified"),
-                          ("ParetoDomBoUapVer", "buildout_uap_verified")]:
+                          ("ParetoDomBoUapVer", "buildout_uap_verified"), ("ParetoDomBordaVer", "borda_verified")]:
             d = [p["seeded"].get("dominates_plan", {}).get(plan) for p in P]
             v[key] = f"{sum(map(bool, d))} of {len(d)}" if all(x is not None for x in d) else TBD
         # Trade-off along the seeded fronts (pooled over seeds): rank correlation between

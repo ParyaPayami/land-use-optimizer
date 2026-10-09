@@ -16,7 +16,9 @@ Reported per lot:
   its strictly worst outcome (removing weakly dominated votes, which otherwise
   makes every non-pivotal profile an equilibrium);
 * welfare loss of the worst such equilibrium and of the sincere outcome
-  relative to the optimum.
+  relative to the optimum;
+* for comparison, the sincere outcome under a weighted Borda count on the same
+  game, each agent ranking the outcomes by its payoffs.
 
 Because welfare can be negative, the ratio form of the price of anarchy is
 reported on welfare shifted so that the worst outcome has welfare 0:
@@ -72,6 +74,9 @@ def analyse_lot(pay: np.ndarray, agents: List[str], voting: ConsensusVotingMecha
         return int(voting.aggregate({agents[a]: np.array([profile[a]]) for a in range(n_a)})[0])
 
     sincere = outcome(sincere_votes)
+    borda = ConsensusVotingMechanism(voting.weights, n_out, rule="borda")
+    ballots = {agents[a]: np.argsort(-pay[:, a], kind="stable")[None, :] for a in range(n_a)}
+    sincere_borda = int(borda.aggregate(ballots)[0])
     ne_outcomes = set()
     for prof in product(*allowed):
         o = outcome(prof)
@@ -98,6 +103,8 @@ def analyse_lot(pay: np.ndarray, agents: List[str], voting: ConsensusVotingMecha
         "optimum": opt, "sincere": sincere, "n_ne_outcomes": len(ne_outcomes),
         "sincere_is_optimal": sincere == opt,
         "welfare_loss_sincere": float(welfare[opt] - welfare[sincere]),
+        "sincere_borda": sincere_borda, "sincere_borda_is_optimal": sincere_borda == opt,
+        "welfare_loss_sincere_borda": float(welfare[opt] - welfare[sincere_borda]),
         "welfare_loss_worst_ne": float(welfare[opt] - welfare[worst_ne]) if worst_ne is not None else np.nan,
         "poa": float(poa),
         "trivial": bool(np.allclose(welfare, welfare[0])),
@@ -123,6 +130,8 @@ def analyse_consensus(env: MultiAgentEnvironment, plan: np.ndarray, n_lots: int 
         "n_nontrivial": int(len(nontriv)),
         "share_sincere_optimal": mean_of("sincere_is_optimal"),
         "mean_welfare_loss_sincere": mean_of("welfare_loss_sincere"),
+        "share_sincere_borda_optimal": mean_of("sincere_borda_is_optimal"),
+        "mean_welfare_loss_sincere_borda": mean_of("welfare_loss_sincere_borda"),
         "mean_welfare_loss_worst_ne": mean_of("welfare_loss_worst_ne", np.nanmean),
         "median_poa": float(np.median(poas)) if len(poas) else np.nan,
         "share_poa_defined": float(len(poas) / len(nontriv)) if nontriv else np.nan,

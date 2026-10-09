@@ -111,11 +111,12 @@ class UrbanOptSystem:
     def make_env(self, use_gnn: bool = True, physics_weight: float = 1.0,
                  agent_types: Optional[List[str]] = None, horizon: int = 10, delta_far: float = 0.5,
                  awareness: float = 0.5, voting_weights: Optional[Dict[str, float]] = None,
-                 utility_weights: Optional[UtilityWeights] = None) -> MultiAgentEnvironment:
+                 utility_weights: Optional[UtilityWeights] = None,
+                 voting_rule: str = "plurality") -> MultiAgentEnvironment:
         return MultiAgentEnvironment(self.outcomes, self.static_state(use_gnn), agent_types or AGENT_TYPES,
                                      delta_far=delta_far, horizon=horizon, physics_weight=physics_weight,
                                      awareness=awareness, voting_weights=voting_weights,
-                                     utility_weights=utility_weights)
+                                     utility_weights=utility_weights, voting_rule=voting_rule)
 
     def train_marl(self, env: MultiAgentEnvironment, iterations: int = 100, seed: int = 0,
                    ppo: Optional[PPOConfig] = None, resume_path=None) -> MARLTrainer:

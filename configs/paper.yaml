@@ -14,7 +14,7 @@ gnn: {epochs: 500, lr: 0.001, patience: 500, hidden_channels: 256, embed_dim: 12
 edge_ablation: {enabled: true, seeds: [0], epochs: 80}
 marl: {iterations: 200, horizon: 10, delta_far: 0.5}
 awareness: 0.5
-variants: [pimaluos, no_gnn, no_capacity_feedback, single_agent_planner, no_equity_agent, self_aware]
+variants: [pimaluos, no_gnn, no_capacity_feedback, single_agent_planner, no_equity_agent, self_aware, borda]
 nash: {enabled: true, n_lots: 200}
 voting_sensitivity: {enabled: true, developer_weights: [0.1, 0.2, 0.3, 0.4, 0.5]}
 pareto: {enabled: true, seeds: [0, 1, 2], pop_size: 120, generations: 100, n_partitions: 2}
