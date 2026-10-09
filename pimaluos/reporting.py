@@ -80,6 +80,7 @@ MACROS = [
     "ParetoColdInBox", "ParetoColdFeasible", "ParetoSeededFeasible",
     "ParetoDomPim", "ParetoDomPimVer", "ParetoDomBoMktVer", "ParetoDomBoUapVer",
     "KneeHomesK", "KneeAffHomesK", "KneeAccess", "KneeJobsK", "KneeCarbonMt", "KneeShaded", "KneeVulnM", "KneeJH",
+    "ParetoRhoAffAccess", "ParetoNSeededTotal", "ParetoShareAccessAboveBase",
     # budgets
     "GnnPatience", "MarlIters", "MarlHorizon", "AblEpochs", "Awareness",
     # learning dynamics of the PIMALUOS variant (seed means)
@@ -148,7 +149,7 @@ def _pm(vals, nd=2, scale=1.0):
     v = np.asarray([x for x in vals if x is not None and np.isfinite(x)], dtype=float) * scale
     if len(v) == 0:
         return TBD
-    if len(v) == 1:
+    if len(v) == 1 or np.all(v == v[0]):  # one value, or a deterministic result
         return _fmt(float(v[0]), nd)
     return f"{_fmt(float(v.mean()), nd)} $\\pm$ {_fmt(float(v.std(ddof=1)), nd)}"
 
@@ -228,7 +229,7 @@ def fig_gnn(gnn: Dict, out: Path):
     ax.text(1, ref, " feature-mean predictor", va="bottom", color=MUTED, fontsize=7)
     ax.set_xlabel("Epoch")
     ax.set_ylabel("Masked reconstruction MSE")
-    ax.legend(loc="upper right", fontsize=7)
+    ax.legend(loc="center right", fontsize=7)
     fig.savefig(out / "fig_gnn_loss.pdf")
     plt.close(fig)
 
@@ -675,6 +676,19 @@ def make_report(results: Path, out: Path) -> Dict[str, str]:
                           ("ParetoDomBoUapVer", "buildout_uap_verified")]:
             d = [p["seeded"].get("dominates_plan", {}).get(plan) for p in P]
             v[key] = f"{sum(map(bool, d))} of {len(d)}" if all(x is not None for x in d) else TBD
+        # Trade-off along the seeded fronts (pooled over seeds): rank correlation between
+        # income-restricted homes and the access index, and the share of front plans whose
+        # access index exceeds existing conditions.
+        from scipy.stats import spearmanr
+
+        sgn = np.array([-1, -1, -1, -1, -1, 1, 1, 1], dtype=float)
+        A = np.vstack([np.asarray(p["seeded"]["F"]) * sgn for p in P])
+        v["ParetoNSeededTotal"] = _fmt(int(len(A)))
+        if len(A) > 2:
+            v["ParetoRhoAffAccess"] = _fmt(float(spearmanr(A[:, 1], A[:, 2])[0]), 2)
+        base_acc = (man or {}).get("baseline_summary", {}).get("access_index")
+        if base_acc is not None:
+            v["ParetoShareAccessAboveBase"] = _fmt(float(100 * (A[:, 2] > base_acc).mean()), 0)
         fig_hv(pareto, out)
     if unc:
         sb = unc["share_better"]
