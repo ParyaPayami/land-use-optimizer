@@ -79,7 +79,7 @@ MACROS = [
     "ParetoPop", "ParetoGen", "ParetoRefDirs", "ParetoNCold", "ParetoNSeeded", "HVCold", "HVSeeded",
     "ParetoColdInBox", "ParetoColdFeasible", "ParetoSeededFeasible",
     "ParetoDomPim", "ParetoDomPimVer", "ParetoDomBoMktVer", "ParetoDomBoUapVer",
-    "KneeHomesK", "KneeAffHomesK", "KneeAccess", "KneeJobsK", "KneeCarbonMt",
+    "KneeHomesK", "KneeAffHomesK", "KneeAccess", "KneeJobsK", "KneeCarbonMt", "KneeShaded", "KneeVulnM", "KneeJH",
     # budgets
     "GnnPatience", "MarlIters", "MarlHorizon", "AblEpochs", "Awareness",
     # learning dynamics of the PIMALUOS variant (seed means)
@@ -665,7 +665,9 @@ def make_report(results: Path, out: Path) -> Dict[str, str]:
                  ParetoSeededFeasible=f"{sum(bool(p['seeded'].get('feasible')) for p in P)} of {len(P)}",
                  KneeHomesK=ks("homes_added", 1e-3, 1), KneeAffHomesK=ks("affordable_homes_added", 1e-3, 1),
                  KneeAccess=ks("access_index", 1, 3), KneeJobsK=ks("jobs_added", 1e-3, 1),
-                 KneeCarbonMt=ks("lifecycle_carbon_kt", 1e-3, 2),
+                 KneeCarbonMt=ks("lifecycle_carbon_kt", 1e-3, 2), KneeShaded=ks("lots_newly_shaded", 1, 0),
+                 KneeVulnM=ks("vulnerable_lot_added_floor_area_sqft", 1e-6, 2),
+                 KneeJH=ks("jobs_housing_balance", 1, 3),
                  ParetoColdInBox=_fmt(int(sum(p["cold"].get("n_in_reference_box", 0) for p in P)))
                  if all("n_in_reference_box" in p["cold"] for p in P) else TBD)
         for key, plan in [("ParetoDomPim", "pimaluos"), ("ParetoDomPimVer", "pimaluos_verified"),
