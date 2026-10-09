@@ -38,6 +38,8 @@
 \providecommand{\NashMedianPoA}{}\renewcommand{\NashMedianPoA}{1.00 $\pm$ 0.00}
 \providecommand{\NashPoaDefined}{}\renewcommand{\NashPoaDefined}{37.5 $\pm$ 2.2}
 \providecommand{\NashMeanNE}{}\renewcommand{\NashMeanNE}{3.46 $\pm$ 0.08}
+\providecommand{\NashShareSincereBordaOpt}{}\renewcommand{\NashShareSincereBordaOpt}{52.0 $\pm$ 0.9}
+\providecommand{\NashLossSincereBorda}{}\renewcommand{\NashLossSincereBorda}{0.160 $\pm$ 0.006}
 \providecommand{\ParetoPop}{}\renewcommand{\ParetoPop}{120}
 \providecommand{\ParetoGen}{}\renewcommand{\ParetoGen}{100}
 \providecommand{\ParetoRefDirs}{}\renewcommand{\ParetoRefDirs}{36}
@@ -52,6 +54,7 @@
 \providecommand{\ParetoDomPimVer}{}\renewcommand{\ParetoDomPimVer}{0 of 3}
 \providecommand{\ParetoDomBoMktVer}{}\renewcommand{\ParetoDomBoMktVer}{0 of 3}
 \providecommand{\ParetoDomBoUapVer}{}\renewcommand{\ParetoDomBoUapVer}{0 of 3}
+\providecommand{\ParetoDomBordaVer}{}\renewcommand{\ParetoDomBordaVer}{0 of 3}
 \providecommand{\KneeHomesK}{}\renewcommand{\KneeHomesK}{363.9 $\pm$ 28.5}
 \providecommand{\KneeAffHomesK}{}\renewcommand{\KneeAffHomesK}{11.3 $\pm$ 1.6}
 \providecommand{\KneeAccess}{}\renewcommand{\KneeAccess}{0.981 $\pm$ 0.009}
@@ -82,12 +85,18 @@
 \providecommand{\MarlEnvLast}{}\renewcommand{\MarlEnvLast}{-1.51}
 \providecommand{\MarlEqFirst}{}\renewcommand{\MarlEqFirst}{1.85}
 \providecommand{\MarlEqLast}{}\renewcommand{\MarlEqLast}{-1.30}
-\providecommand{\TimeTotalH}{}\renewcommand{\TimeTotalH}{33.6}
+\providecommand{\MarlBordaResLast}{}\renewcommand{\MarlBordaResLast}{-2.13}
+\providecommand{\MarlBordaDevLast}{}\renewcommand{\MarlBordaDevLast}{1.66}
+\providecommand{\MarlBordaPlaLast}{}\renewcommand{\MarlBordaPlaLast}{2.77}
+\providecommand{\MarlBordaEnvLast}{}\renewcommand{\MarlBordaEnvLast}{-1.33}
+\providecommand{\MarlBordaEqLast}{}\renewcommand{\MarlBordaEqLast}{-1.21}
+\providecommand{\MarlBordaFALastM}{}\renewcommand{\MarlBordaFALastM}{722}
+\providecommand{\TimeTotalH}{}\renewcommand{\TimeTotalH}{38.9}
 \providecommand{\GnnSecPerEpoch}{}\renewcommand{\GnnSecPerEpoch}{14.1}
-\providecommand{\MarlSecPerIter}{}\renewcommand{\MarlSecPerIter}{21.2}
+\providecommand{\MarlSecPerIter}{}\renewcommand{\MarlSecPerIter}{22.7}
 \providecommand{\AblMinPerConfig}{}\renewcommand{\AblMinPerConfig}{14.3}
 \providecommand{\ParetoMinPerRun}{}\renewcommand{\ParetoMinPerRun}{45.8}
-\providecommand{\TimeGraphS}{}\renewcommand{\TimeGraphS}{8}
+\providecommand{\TimeGraphS}{}\renewcommand{\TimeGraphS}{7}
 \providecommand{\Hardware}{}\renewcommand{\Hardware}{4 CPU cores (Intel Xeon Processor at 2.80GHz) with 15.7 GB memory, no GPU}
 \providecommand{\TorchVersion}{}\renewcommand{\TorchVersion}{2.14.1+cu130}
 \providecommand{\WalkNodes}{}\renewcommand{\WalkNodes}{8{,}297}
@@ -626,6 +635,50 @@
 \providecommand{\SelfAwareSewerVer}{}\renewcommand{\SelfAwareSewerVer}{0.0}
 \providecommand{\SelfAwareRepairItProp}{}\renewcommand{\SelfAwareRepairItProp}{\textbf{[TBD]}}
 \providecommand{\SelfAwareRepairItVer}{}\renewcommand{\SelfAwareRepairItVer}{31.0}
+\providecommand{\BordaHomesKProp}{}\renewcommand{\BordaHomesKProp}{622.2 $\pm$ 81.4}
+\providecommand{\BordaHomesKVer}{}\renewcommand{\BordaHomesKVer}{431.6 $\pm$ 36.2}
+\providecommand{\BordaAffHomesKProp}{}\renewcommand{\BordaAffHomesKProp}{134.1 $\pm$ 25.8}
+\providecommand{\BordaAffHomesKVer}{}\renewcommand{\BordaAffHomesKVer}{74.8 $\pm$ 10.7}
+\providecommand{\BordaAffSharePctProp}{}\renewcommand{\BordaAffSharePctProp}{21.4 $\pm$ 1.5}
+\providecommand{\BordaAffSharePctVer}{}\renewcommand{\BordaAffSharePctVer}{17.3 $\pm$ 1.1}
+\providecommand{\BordaAccessProp}{}\renewcommand{\BordaAccessProp}{0.551 $\pm$ 0.067}
+\providecommand{\BordaAccessVer}{}\renewcommand{\BordaAccessVer}{0.675 $\pm$ 0.031}
+\providecommand{\BordaFullPctProp}{}\renewcommand{\BordaFullPctProp}{97.25 $\pm$ 0.81}
+\providecommand{\BordaFullPctVer}{}\renewcommand{\BordaFullPctVer}{98.52 $\pm$ 0.26}
+\providecommand{\BordaJobsKProp}{}\renewcommand{\BordaJobsKProp}{245.9 $\pm$ 81.4}
+\providecommand{\BordaJobsKVer}{}\renewcommand{\BordaJobsKVer}{104.0 $\pm$ 25.8}
+\providecommand{\BordaTaxMProp}{}\renewcommand{\BordaTaxMProp}{9{,}774 $\pm$ 403}
+\providecommand{\BordaTaxMVer}{}\renewcommand{\BordaTaxMVer}{6{,}930 $\pm$ 263}
+\providecommand{\BordaValueBProp}{}\renewcommand{\BordaValueBProp}{191.6 $\pm$ 7.7}
+\providecommand{\BordaValueBVer}{}\renewcommand{\BordaValueBVer}{133.3 $\pm$ 5.1}
+\providecommand{\BordaJHProp}{}\renewcommand{\BordaJHProp}{0.369 $\pm$ 0.011}
+\providecommand{\BordaJHVer}{}\renewcommand{\BordaJHVer}{0.363 $\pm$ 0.005}
+\providecommand{\BordaMixProp}{}\renewcommand{\BordaMixProp}{0.512 $\pm$ 0.020}
+\providecommand{\BordaMixVer}{}\renewcommand{\BordaMixVer}{0.534 $\pm$ 0.010}
+\providecommand{\BordaCarbonMtProp}{}\renewcommand{\BordaCarbonMtProp}{134.29 $\pm$ 5.37}
+\providecommand{\BordaCarbonMtVer}{}\renewcommand{\BordaCarbonMtVer}{86.21 $\pm$ 4.08}
+\providecommand{\BordaEmbMtProp}{}\renewcommand{\BordaEmbMtProp}{27.42 $\pm$ 1.67}
+\providecommand{\BordaEmbMtVer}{}\renewcommand{\BordaEmbMtVer}{17.94 $\pm$ 1.05}
+\providecommand{\BordaOpKtProp}{}\renewcommand{\BordaOpKtProp}{3{,}562 $\pm$ 124}
+\providecommand{\BordaOpKtVer}{}\renewcommand{\BordaOpKtVer}{2{,}276 $\pm$ 101}
+\providecommand{\BordaTransitPctProp}{}\renewcommand{\BordaTransitPctProp}{92.6 $\pm$ 1.0}
+\providecommand{\BordaTransitPctVer}{}\renewcommand{\BordaTransitPctVer}{97.8 $\pm$ 0.5}
+\providecommand{\BordaFloodMProp}{}\renewcommand{\BordaFloodMProp}{214.53 $\pm$ 28.45}
+\providecommand{\BordaFloodMVer}{}\renewcommand{\BordaFloodMVer}{91.57 $\pm$ 17.61}
+\providecommand{\BordaVulnMProp}{}\renewcommand{\BordaVulnMProp}{64.36 $\pm$ 34.26}
+\providecommand{\BordaVulnMVer}{}\renewcommand{\BordaVulnMVer}{43.82 $\pm$ 21.45}
+\providecommand{\BordaDispPctProp}{}\renewcommand{\BordaDispPctProp}{9.0 $\pm$ 4.4}
+\providecommand{\BordaDispPctVer}{}\renewcommand{\BordaDispPctVer}{9.3 $\pm$ 4.2}
+\providecommand{\BordaFAMProp}{}\renewcommand{\BordaFAMProp}{698.8 $\pm$ 55.2}
+\providecommand{\BordaFAMVer}{}\renewcommand{\BordaFAMVer}{464.4 $\pm$ 30.4}
+\providecommand{\BordaShadedProp}{}\renewcommand{\BordaShadedProp}{6{,}348 $\pm$ 130}
+\providecommand{\BordaShadedVer}{}\renewcommand{\BordaShadedVer}{0}
+\providecommand{\BordaTrafficProp}{}\renewcommand{\BordaTrafficProp}{55.0 $\pm$ 7.2}
+\providecommand{\BordaTrafficVer}{}\renewcommand{\BordaTrafficVer}{0.0}
+\providecommand{\BordaSewerProp}{}\renewcommand{\BordaSewerProp}{20.7 $\pm$ 2.9}
+\providecommand{\BordaSewerVer}{}\renewcommand{\BordaSewerVer}{0.0}
+\providecommand{\BordaRepairItProp}{}\renewcommand{\BordaRepairItProp}{\textbf{[TBD]}}
+\providecommand{\BordaRepairItVer}{}\renewcommand{\BordaRepairItVer}{31.3 $\pm$ 0.6}
 \providecommand{\PimVsRandHomesKPct}{}\renewcommand{\PimVsRandHomesKPct}{223.1 $\pm$ 7.5}
 \providecommand{\PimVsRandAffHomesKPct}{}\renewcommand{\PimVsRandAffHomesKPct}{261.5 $\pm$ 35.4}
 \providecommand{\PimVsRandAffSharePctPct}{}\renewcommand{\PimVsRandAffSharePctPct}{11.8 $\pm$ 9.3}
@@ -824,6 +877,28 @@
 \providecommand{\PimVsSelfAwareTrafficPct}{}\renewcommand{\PimVsSelfAwareTrafficPct}{\textbf{[TBD]}}
 \providecommand{\PimVsSelfAwareSewerPct}{}\renewcommand{\PimVsSelfAwareSewerPct}{\textbf{[TBD]}}
 \providecommand{\PimVsSelfAwareRepairItPct}{}\renewcommand{\PimVsSelfAwareRepairItPct}{0.0}
+\providecommand{\PimVsBordaHomesKPct}{}\renewcommand{\PimVsBordaHomesKPct}{9.2 $\pm$ 9.8}
+\providecommand{\PimVsBordaAffHomesKPct}{}\renewcommand{\PimVsBordaAffHomesKPct}{15.5 $\pm$ 16.1}
+\providecommand{\PimVsBordaAffSharePctPct}{}\renewcommand{\PimVsBordaAffSharePctPct}{5.5 $\pm$ 5.4}
+\providecommand{\PimVsBordaAccessPct}{}\renewcommand{\PimVsBordaAccessPct}{-3.6 $\pm$ 4.3}
+\providecommand{\PimVsBordaFullPctPct}{}\renewcommand{\PimVsBordaFullPctPct}{-0.2 $\pm$ 0.3}
+\providecommand{\PimVsBordaJobsKPct}{}\renewcommand{\PimVsBordaJobsKPct}{10.8 $\pm$ 11.4}
+\providecommand{\PimVsBordaTaxMPct}{}\renewcommand{\PimVsBordaTaxMPct}{6.2 $\pm$ 5.2}
+\providecommand{\PimVsBordaValueBPct}{}\renewcommand{\PimVsBordaValueBPct}{6.3 $\pm$ 5.2}
+\providecommand{\PimVsBordaJHPct}{}\renewcommand{\PimVsBordaJHPct}{-0.3 $\pm$ 1.5}
+\providecommand{\PimVsBordaMixPct}{}\renewcommand{\PimVsBordaMixPct}{-1.3 $\pm$ 1.0}
+\providecommand{\PimVsBordaCarbonMtPct}{}\renewcommand{\PimVsBordaCarbonMtPct}{8.7 $\pm$ 7.4}
+\providecommand{\PimVsBordaEmbMtPct}{}\renewcommand{\PimVsBordaEmbMtPct}{9.0 $\pm$ 7.4}
+\providecommand{\PimVsBordaOpKtPct}{}\renewcommand{\PimVsBordaOpKtPct}{8.7 $\pm$ 7.5}
+\providecommand{\PimVsBordaTransitPctPct}{}\renewcommand{\PimVsBordaTransitPctPct}{-0.3 $\pm$ 0.7}
+\providecommand{\PimVsBordaFloodMPct}{}\renewcommand{\PimVsBordaFloodMPct}{15.2 $\pm$ 26.8}
+\providecommand{\PimVsBordaVulnMPct}{}\renewcommand{\PimVsBordaVulnMPct}{95.0 $\pm$ 123.5}
+\providecommand{\PimVsBordaDispPctPct}{}\renewcommand{\PimVsBordaDispPctPct}{74.2 $\pm$ 96.7}
+\providecommand{\PimVsBordaFAMPct}{}\renewcommand{\PimVsBordaFAMPct}{9.0 $\pm$ 8.0}
+\providecommand{\PimVsBordaShadedPct}{}\renewcommand{\PimVsBordaShadedPct}{\textbf{[TBD]}}
+\providecommand{\PimVsBordaTrafficPct}{}\renewcommand{\PimVsBordaTrafficPct}{\textbf{[TBD]}}
+\providecommand{\PimVsBordaSewerPct}{}\renewcommand{\PimVsBordaSewerPct}{\textbf{[TBD]}}
+\providecommand{\PimVsBordaRepairItPct}{}\renewcommand{\PimVsBordaRepairItPct}{-1.0 $\pm$ 1.8}
 \providecommand{\UncBoMktHomes}{}\renewcommand{\UncBoMktHomes}{100}
 \providecommand{\UncBoMktAffHomes}{}\renewcommand{\UncBoMktAffHomes}{100}
 \providecommand{\UncBoMktAccess}{}\renewcommand{\UncBoMktAccess}{0}

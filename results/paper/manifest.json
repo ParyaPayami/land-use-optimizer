@@ -38,7 +38,8 @@
    "no_capacity_feedback",
    "single_agent_planner",
    "no_equity_agent",
-   "self_aware"
+   "self_aware",
+   "borda"
   ],
   "awareness": 0.5,
   "baseline_horizon": 10,
@@ -379,16 +380,16 @@
   "facility"
  ],
  "timings": {
-  "data_s": 17.310713529586792,
-  "graph_s": 8.17809271812439,
+  "data_s": 15.25124216079712,
+  "graph_s": 7.05361795425415,
   "gnn_s": 8187.557238578796,
-  "marl_s": 56013.885476112366,
+  "marl_s": 72249.15494179726,
   "gnn_epochs": 580,
-  "marl_iters": 2640,
+  "marl_iters": 3180,
   "edge_ablation_s": 6873.141784191132,
   "pareto_s": 16472.37642621994,
-  "uncertainty_s": 128.06777954101562,
-  "total_s": 2917.0207602977753
+  "uncertainty_s": 113.53691005706787,
+  "total_s": 4778.305566310883
  },
  "environment": {
   "python": "3.11.15",
@@ -401,5 +402,5 @@
   "cuda": false,
   "threads": 4
  },
- "finished": "2026-10-09 12:51:40"
+ "finished": "2026-10-09 20:27:21"
 }
